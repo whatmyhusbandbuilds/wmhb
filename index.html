@@ -238,6 +238,7 @@ dialog::backdrop{background:rgba(28,27,21,.6)}
 
 <main class="wrap">
   <div>
+    <section id="enquiries" aria-labelledby="h-enq" hidden></section>
     <section id="todo" aria-labelledby="h-todo"></section>
     <section id="coming" aria-labelledby="h-coming"></section>
   </div>
@@ -720,19 +721,47 @@ async function copy(text, btn) {
 let toastTimer;
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("on"), 5000); }
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-act],[data-book],[data-copy],[data-close],[data-new]"); if (!t) { if (e.target === dlg) dlg.close(); return; }
+  const t = e.target.closest("[data-act],[data-book],[data-copy],[data-close],[data-new],[data-enq],[data-enqdone]"); if (!t) { if (e.target === dlg) dlg.close(); return; }
   if (t.dataset.close != null) dlg.close();
+  else if (t.dataset.enq != null) bookEnquiry(ENQ[+t.dataset.enq]);
+  else if (t.dataset.enqdone != null) enquiryDone(ENQ[+t.dataset.enqdone], t);
   else if (t.dataset.new != null) { if (D) openForm("Add a booking", "Goes into the next empty row of the Sheet", newFields(), null); }
   else if (t.dataset.act) openUpdate(t.dataset.act, +t.dataset.row);
   else if (t.dataset.book) openBooking(+t.dataset.book);
   else if (t.dataset.copy) copy(t.dataset.copy, t);
 });
 
+/* ---------- enquiries from the public form ---------- */
+let ENQ = [];
+function drawEnquiries() {
+  const el = $("#enquiries");
+  if (!ENQ.length) { el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  el.innerHTML = "<h2 id=\"h-enq\">new enquiries</h2><p class=\"lede\">" + plural(ENQ.length, "enquiry").replace("enquirys", "enquiries") + " from the form. Reply within a day.</p><ul class=\"rows\">" +
+    ENQ.map((q, i) => "<li class=\"job\"><div class=\"when\"><b>" + (q.received ? fmtShort(q.received) : "New") + "</b><span>" + (q.received ? inDays(diff(q.received, D.today)) : "") + "</span></div>" +
+      "<div class=\"what\"><b>" + esc(q.name) + "</b><span>" + esc([q.type, q.date].filter(Boolean).join(", ")) + "<br>" + esc(q.contact) + (q.message ? "<br>" + esc(q.message) : "") + "</span></div>" +
+      "<button class=\"btn\" type=\"button\" data-enq=\"" + i + "\">Start a booking</button><button class=\"btn ghost\" type=\"button\" data-enqdone=\"" + i + "\">Mark as done</button></li>").join("") + "</ul>";
+}
+function bookEnquiry(q) {
+  const f = newFields(), set = (k, v) => { const x = f.find(y => y.key === k); if (x && v) x.value = v; };
+  set("Client name", q.name);
+  if (opts("Event type", []).indexOf(q.type) >= 0) set("Event type", q.type);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(q.date)) set("Event date", q.date);
+  set(/^[\d\s()+-]{7,}$/.test(q.contact) ? "Phone" : "Instagram", q.contact);
+  set("Notes", ["Enquiry " + (q.received ? fmtShort(q.received) : ""), q.type, q.date ? "wants " + q.date : "", q.message].filter(Boolean).join(". "));
+  openForm("Add a booking", "From " + q.name + "\u2019s enquiry. Mark the enquiry as done afterwards.", f, null);
+}
+async function enquiryDone(q, btn) {
+  btn.disabled = true; btn.textContent = "Saving\u2026";
+  try { apply(JSON.parse(await server("enquiryDone", { row: q.row, name: q.name })).data); toast("Enquiry from " + q.name + " marked as done."); }
+  catch (x) { btn.disabled = false; btn.textContent = "Mark as done"; toast("Not saved. " + ((x && x.message) || "")); }
+}
+
 /* ---------- reading the Sheet ---------- */
 function fresh(msg, warn) { const el = $("#fresh"); el.textContent = msg; el.classList.toggle("warn", !!warn); }
 function apply(data) {
   SHEET_ID = data.sheetId; GID_BOOKINGS = String(data.gid); SHEET_URL = "https://docs.google.com/spreadsheets/d/" + SHEET_ID + "/edit";
-  D = normalise(data); readAt = data.readAt; draw();
+  D = normalise(data); readAt = data.readAt; ENQ = data.enquiries || []; draw(); drawEnquiries();
   fresh("Live from your Sheet, read at " + clock(readAt) + ".");
 }
 async function load() {
