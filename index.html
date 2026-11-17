@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en-NZ">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>wmhb</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#F1C22D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="wmhb">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800;900&display=swap">
+<style>
+:root{
+  /* Layout idea: time is a tape measure. A yellow band holds the next job and a ruler of days;
+     everything under it is a quiet job sheet on paper, ruled with the 1.5px lines from the pricing cards. */
+  --tape:#F1C22D; --ink:#1C1B15; --paper:#FAFAF7; --soft:#4D4220; --mute:#5C5A50; --line:#E0DDD0;
+  --late:#B3261E; --done:#2F6B3F;
+  --display:'Inter Tight',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --rule:1.5px solid rgba(28,27,21,.22);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:500 16px/1.4 var(--display);font-variant-numeric:tabular-nums}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.band :focus-visible{outline-color:var(--ink)}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:9px 16px;border:0;border-radius:4px;background:var(--ink);color:var(--paper);font-weight:700;font-size:15px;line-height:1.15;text-decoration:none;white-space:nowrap}
+.btn.ghost{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.btn:hover{background:#34322A}.btn.ghost:hover{background:rgba(28,27,21,.08)}
+.linkish{background:none;border:0;padding:0;font-weight:800;text-align:left;text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:3px}
+
+/* ---------- yellow band ---------- */
+.band{background:var(--tape);padding:calc(22px + env(safe-area-inset-top)) 0 14px}
+.top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px 24px;flex-wrap:wrap}
+.logo{position:relative;width:118px;height:60px;flex-shrink:0}
+.logo b{position:absolute;left:0;top:0;font-weight:900;font-size:44px;line-height:1;letter-spacing:-4.5px}
+.logo svg{position:absolute;left:16px;top:49px}
+.tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.fresh{font-size:14px;font-weight:600;color:var(--soft);max-width:340px;text-align:right;line-height:1.3}
+.fresh.warn{color:var(--ink)}
+.next{margin-top:26px}
+.next h1{margin:0;font-weight:900;font-size:clamp(38px,8.2vw,92px);line-height:.9;letter-spacing:-.05em;text-wrap:balance;max-width:16ch}
+.next .where{margin:18px 0 0;font-size:clamp(17px,2.1vw,22px);font-weight:600;color:var(--soft);max-width:60ch}
+.next .owed{margin-top:14px;display:flex;align-items:center;gap:12px 18px;flex-wrap:wrap;font-size:clamp(17px,2.1vw,22px);font-weight:800}
+
+.tape{margin-top:26px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:rgba(28,27,21,.4) transparent}
+.tape-in{position:relative;height:184px}
+.tape-in>*{position:absolute}
+.t-rule{left:0;right:0;top:84px;height:3px;background:var(--ink)}
+.t-days{left:0;right:0;top:87px;height:9px;background:repeating-linear-gradient(90deg,var(--ink) 0 2px,transparent 2px 14px)}
+.t-tick{top:87px;width:2px;background:var(--ink)}
+.t-tick.wk{height:17px}.t-tick.mo{height:30px;width:3px}.t-tick.now{height:30px;width:5px;margin-left:-1.5px}
+.t-lab{top:107px;transform:translateX(-50%);font-size:11px;font-weight:600;color:var(--soft);white-space:nowrap}
+.t-lab.mo{top:121px;transform:none;margin-left:6px;font-size:14px;font-weight:800;color:var(--ink)}
+.t-lab.now{top:121px;font-size:14px;font-weight:900;color:var(--ink)}
+.t-flag{z-index:2;height:24px;padding:0 8px;border:0;border-radius:3px;background:var(--ink);color:var(--paper);font-size:13px;font-weight:700;line-height:24px;white-space:nowrap}
+.t-flag.past{background:var(--tape);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.t-stem{width:2px;background:var(--ink)}
+.t-dim{top:68px;height:2px;background:var(--ink);transform-origin:left center;animation:pull .7s cubic-bezier(.2,.7,.2,1) both}
+.t-dim::before,.t-dim::after{content:"";position:absolute;top:-5px;width:2px;height:12px;background:var(--ink)}
+.t-dim::before{left:0}.t-dim::after{right:0}
+.t-dim span{position:absolute;left:50%;top:-10px;transform:translateX(-50%);padding:0 7px;background:var(--tape);font-size:13px;font-weight:800;line-height:20px;white-space:nowrap}
+@keyframes pull{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.t-due{top:79px;width:11px;height:11px;margin-left:-4.5px;transform:rotate(45deg);background:var(--paper);box-shadow:inset 0 0 0 2px var(--ink)}
+.t-due.late{background:var(--late);box-shadow:none}
+.t-duelab{font-size:12px;font-weight:700;line-height:18px;white-space:nowrap;transform:translateX(-50%)}
+.t-duelab.late{color:var(--late)}
+
+/* ---------- paper ---------- */
+main.wrap{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:56px 56px;padding-top:44px;padding-bottom:64px;align-items:start}
+.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 56px;align-items:start}
+.cols h3{margin-top:14px}
+main>div{display:grid;gap:56px;min-width:0}
+.full{grid-column:1/-1}
+section{min-width:0}
+h2{margin:0 0 6px;font-weight:900;font-size:34px;line-height:1;letter-spacing:-.045em}
+.lede{margin:0 0 14px;color:var(--mute);font-size:15px}
+.rows{list-style:none;margin:0;padding:0;border-top:var(--rule)}
+.rows>li{border-bottom:var(--rule)}
+.empty{padding:18px 0;color:var(--mute)}
+
+.job{display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap;padding:14px 0 14px 14px;border-left:5px solid var(--tape)}
+.job.late{border-left-color:var(--late)}.job.later{border-left-color:var(--line)}
+.job .when{width:86px;flex-shrink:0;line-height:1.2}
+.job .when b{display:block;font-weight:800;font-size:17px}
+.job .when span{font-size:13px;color:var(--mute)}
+.job.late .when span{color:var(--late);font-weight:700}
+.job .what{flex:1 1 220px;min-width:0}
+.job .what b{display:block;font-size:18px;font-weight:800;line-height:1.2}
+.job .what span{color:var(--mute);font-size:15px}
+.subhead{margin:26px 0 8px;font-size:15px;font-weight:800}
+
+.gig{display:grid;grid-template-columns:68px minmax(0,1fr);gap:16px;padding:18px 0}
+.gig .day{line-height:1}
+.gig .day b{display:block;font-size:40px;font-weight:900;letter-spacing:-.05em}
+.gig .day span{display:block;margin-top:4px;font-size:14px;font-weight:700;color:var(--mute)}
+.gig .head{display:flex;justify-content:space-between;align-items:baseline;gap:8px 16px;flex-wrap:wrap}
+.gig .head .linkish{font-size:21px;line-height:1.15}
+.gig .head span{font-weight:700;color:var(--mute);font-size:15px}
+.gig p{margin:4px 0 0;color:var(--mute);font-size:15px}
+.paid{position:relative;height:12px;margin-top:14px;border-radius:2px;background:var(--line)}
+.paid i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--ink)}
+.paid em{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--paper);box-shadow:0 0 0 1px var(--mute)}
+.gig .cap{display:flex;justify-content:space-between;gap:6px 16px;flex-wrap:wrap;margin-top:8px;font-size:15px}
+.gig .cap b{font-weight:800}
+.chip{display:inline-block;padding:2px 9px;border-radius:3px;font-size:13px;font-weight:700;line-height:20px;background:var(--line);color:var(--ink);white-space:nowrap}
+.chip.ok{background:#DCEADF;color:var(--done)}.chip.late{background:#F6DAD7;color:var(--late)}.chip.tape{background:var(--tape)}
+
+.profit{padding:22px 24px 24px;border-radius:4px;background:var(--tape)}
+.profit div{font-weight:800}
+.profit b{display:block;margin:2px 0 4px;font-size:clamp(56px,7vw,84px);font-weight:900;line-height:1;letter-spacing:-.05em}
+.profit span{color:var(--soft);font-weight:600;font-size:15px}
+.ledger{margin:6px 0 0;padding:0}
+.ledger div{display:flex;justify-content:space-between;align-items:baseline;gap:16px;padding:12px 0;border-bottom:var(--rule)}
+.ledger dt{font-weight:600}.ledger dt small{display:block;font-size:13px;font-weight:500;color:var(--mute)}
+.ledger dd{margin:0;font-size:24px;font-weight:900;letter-spacing:-.03em}
+.ledger .late dd{color:var(--late)}
+h3{margin:30px 0 10px;font-size:16px;font-weight:800}
+.months{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px;align-items:end;height:150px;border-bottom:2px solid var(--ink)}
+.months div{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%}
+.months small{font-size:11px;font-weight:700;margin-bottom:3px;white-space:nowrap}
+.months .bars{display:flex;align-items:flex-end;gap:2px;width:100%;justify-content:center}
+.months i{display:block;width:42%;max-width:18px;min-height:0;background:var(--ink)}
+.months i+i{background:var(--tape);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.mlabs{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px;margin-top:5px;font-size:11px;font-weight:600;color:var(--mute);text-align:center}
+.mlabs b{color:var(--ink);font-weight:800}
+.key{display:flex;gap:16px;margin-top:10px;font-size:13px;color:var(--mute)}
+.key i{display:inline-block;width:11px;height:11px;margin-right:6px;background:var(--ink);vertical-align:-1px}
+.key span+span i{background:var(--tape);box-shadow:inset 0 0 0 1.5px var(--ink)}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{padding:9px 12px 9px 0;text-align:left;border-bottom:var(--rule);vertical-align:top}
+th{font-size:13px;font-weight:700;color:var(--mute);white-space:nowrap}
+td.n,th.n{text-align:right;padding-right:0}
+tr.sum td{font-weight:800;border-bottom:0}
+.scroll{overflow-x:auto}
+.scroll table{min-width:640px}
+
+.inv{display:flex;align-items:center;justify-content:space-between;gap:12px 16px;flex-wrap:wrap;padding:14px 0;border-top:var(--rule);border-bottom:var(--rule)}
+.inv b{display:block;font-size:34px;font-weight:900;letter-spacing:-.04em;line-height:1.05}
+.inv span{font-size:14px;color:var(--mute)}
+.links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px}
+.links .btn{white-space:normal;text-align:center}
+.note{margin:14px 0 0;font-size:14px;color:var(--mute)}
+footer.wrap{padding-bottom:48px;font-size:14px;color:var(--mute)}
+footer .ruler{display:block;width:100%;height:34px;margin-bottom:16px}
+
+/* ---------- dialog ---------- */
+dialog{width:min(580px,calc(100% - 24px));max-height:calc(100% - 24px);padding:0;border:0;border-radius:6px;background:var(--paper);color:var(--ink);overflow:auto}
+dialog::backdrop{background:rgba(28,27,21,.6)}
+.d-head{position:sticky;top:0;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:18px 20px 14px;background:var(--tape)}
+.d-head h2{font-size:28px}
+.d-head p{margin:4px 0 0;font-weight:600;color:var(--soft);font-size:15px}
+.d-body{padding:16px 20px 22px}
+.d-body dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 16px;margin:0 0 16px;font-size:15px}
+.d-body dt{color:var(--mute)}.d-body dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+.acts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.acts .btn{white-space:normal;text-align:center}
+.how{margin:0 0 14px;font-size:15px;color:var(--mute)}
+.step{padding:14px 0;border-top:var(--rule)}
+.step h3{margin:0 0 2px;font-size:17px}
+.step small{color:var(--mute);font-size:14px}
+.step label{display:block;margin:10px 0 4px;font-size:14px;font-weight:700}
+.step input,.step select,.step textarea{width:100%;min-height:44px;padding:8px 10px;border:1.5px solid var(--ink);border-radius:4px;background:#fff;font:600 17px var(--display);color:var(--ink)}
+.step textarea{min-height:120px;font-size:15px;font-weight:500}
+.step .type{margin:10px 0;font-size:16px}
+.step .type b{padding:2px 8px;border-radius:3px;background:var(--tape);font-weight:800;overflow-wrap:anywhere}
+.step .go{display:flex;gap:10px;flex-wrap:wrap}
+.step .go>*{flex:1 1 160px}
+
+@media (max-width:900px){
+  main.wrap{grid-template-columns:minmax(0,1fr);gap:48px}
+  .cols{grid-template-columns:minmax(0,1fr)}
+  main>div{gap:48px}
+}
+@media (max-width:560px){
+  .wrap{padding:0 16px}
+  .fresh{text-align:left;max-width:none;flex-basis:100%;order:3}
+  .tools{justify-content:flex-start}
+  h2{font-size:30px}
+  .job .when{width:74px}
+  .job .btn{flex:1 1 100%}
+  .gig{grid-template-columns:56px minmax(0,1fr);gap:12px}
+  .gig .day b{font-size:34px}
+  .acts,.links{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){.t-dim{animation:none}}
+
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}
+.fld{min-width:0}.fld.wide{grid-column:1/-1}
+.fld label{display:block;margin-bottom:4px;font-size:14px;font-weight:700}
+.fld input:not([type=checkbox]),.fld select,.fld textarea{width:100%;min-height:44px;padding:8px 10px;border:1.5px solid var(--ink);border-radius:4px;background:#fff;font:600 17px var(--display);color:var(--ink)}
+.fld textarea{min-height:120px;font-size:15px;font-weight:500}
+.fld small{display:block;margin-top:4px;color:var(--mute);font-size:13px}
+.fld.tick{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;align-items:center;min-height:44px}
+.fld.tick input{width:24px;height:24px;margin:0;accent-color:var(--ink)}
+.fld.tick label{margin:0;font-size:15px}.fld.tick small{grid-column:2;margin:0}
+.sumbox{margin-top:18px;padding:14px 16px;border-radius:4px;background:#F1EEE2}
+.sumbox h3{margin:0 0 6px;font-size:15px}
+.sumbox ul{margin:0;padding-left:18px;font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.sumbox .none{list-style:none;margin-left:-18px;color:var(--mute);font-weight:500}
+.need,.err{margin:10px 0 0;font-size:14px;color:var(--mute)}
+.err{font-size:15px;font-weight:700;color:var(--late)}
+.need:empty,.err:empty{display:none}
+#save{width:100%;margin-top:14px}
+.btn:disabled{opacity:.45;cursor:default}
+.toast{position:fixed;left:50%;bottom:20px;z-index:10;max-width:calc(100% - 32px);padding:12px 18px;border-radius:4px;background:var(--ink);color:var(--paper);font-weight:700;opacity:0;transform:translate(-50%,16px);pointer-events:none;transition:opacity .2s,transform .2s}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+@media (max-width:560px){.fields{grid-template-columns:minmax(0,1fr)}}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+
+<header class="band">
+  <div class="wrap">
+    <div class="top">
+      <div class="logo" aria-label="wmhb"><b>wmhb</b><svg aria-hidden="true" width="86" height="10" viewBox="0 0 500 57" fill="#1C1B15"><path id="logoRuler"></path></svg></div>
+      <div class="tools">
+        <span class="fresh" id="fresh" role="status"></span>
+        <button class="btn ghost" id="refresh" type="button">Refresh</button>
+        <a class="btn ghost" id="openSheet" target="_blank" rel="noopener">Open the Sheet</a>
+        <button class="btn" id="newBooking" type="button" data-new>Add a booking</button>
+      </div>
+    </div>
+    <div class="next" id="next"><h1>Reading your Sheet…</h1></div>
+    <div class="tape" id="tape" tabindex="0" aria-label="Timeline of events and payment dates. Scroll sideways for more."></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div>
+    <section id="todo" aria-labelledby="h-todo"></section>
+    <section id="coming" aria-labelledby="h-coming"></section>
+  </div>
+  <div>
+    <section id="money" aria-labelledby="h-money"></section>
+    <section id="handy" aria-labelledby="h-handy"></section>
+  </div>
+  <section id="clients" class="full" aria-labelledby="h-clients"></section>
+  <section id="prices" class="full" aria-labelledby="h-prices"></section>
+</main>
+
+<footer class="wrap">
+  <svg class="ruler" aria-hidden="true" viewBox="0 0 936 34" preserveAspectRatio="none" fill="#1C1B15"><path id="footRuler"></path></svg>
+  <span id="foot"></span>
+</footer>
+
+<dialog id="dlg" aria-labelledby="dlg-title"></dialog>
+
+<div class="toast" id="toast" role="status"></div>
+<script>
+"use strict";
+let SHEET_ID = "1biNlmNcwoKeSCuLCSVgT51dP9u72DR8kMJHl4WE-woU";
+let GID_BOOKINGS = "254447542";
+let SHEET_URL = "https://docs.google.com/spreadsheets/d/" + SHEET_ID + "/edit";
+const FOLDERS = {
+  invoices: "https://drive.google.com/drive/folders/1vxsle_uWcRzZmJpjDOHU6kIKy_sPTEi3",
+  videos: "https://drive.google.com/drive/folders/1j64-uxvGBwKODRebGWm9Sjsxm03dQqhC",
+  cards: "https://drive.google.com/drive/folders/1Tx9Apiv_itadIRP6PmlJ5kzqt69nXYs7"
+};
+const DAY = 864e5, W = 14;
+const WD = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"], MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+/* ---------- small helpers ---------- */
+const $ = (s, r) => (r || document).querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const money = n => (n < 0 ? "-$" : "$") + Math.abs(Math.round(n)).toLocaleString("en-NZ");
+const txt = v => v == null ? "" : String(v).trim();
+const num = v => { const n = Number(v); return isFinite(n) ? n : 0; };
+const ms = iso => Date.parse(iso + "T00:00:00Z");
+const addDays = (iso, n) => new Date(ms(iso) + n * DAY).toISOString().slice(0, 10);
+const diff = (a, b) => Math.round((ms(a) - ms(b)) / DAY);
+const fromSerial = v => typeof v === "number" && v > 20000 ? new Date(Date.UTC(1899, 11, 30) + Math.round(v) * DAY).toISOString().slice(0, 10) : null;
+const dParts = iso => { const d = new Date(ms(iso)); return { wd: WD[d.getUTCDay()], d: d.getUTCDate(), mo: MO[d.getUTCMonth()], m: d.getUTCMonth(), y: d.getUTCFullYear(), dow: d.getUTCDay() }; };
+const fmt = iso => { const p = dParts(iso); return p.wd + " " + p.d + " " + p.mo; };
+const fmtShort = iso => { const p = dParts(iso); return p.d + " " + p.mo; };
+const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
+const inDays = n => n === 0 ? "today" : n === 1 ? "tomorrow" : n > 1 ? "in " + n + " days" : n === -1 ? "yesterday" : (-n) + " days ago";
+function todayIso(t) {
+  const p = {}; new Intl.DateTimeFormat("en-GB", { timeZone: "Pacific/Auckland", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(t ? new Date(t) : new Date()).forEach(x => p[x.type] = x.value);
+  return p.year + "-" + p.month + "-" + p.day;
+}
+const clock = t => new Intl.DateTimeFormat("en-NZ", { timeZone: "Pacific/Auckland", hour: "numeric", minute: "2-digit" }).format(new Date(t)).replace(/\s/g, " ").toLowerCase();
+function colLetter(i) { let s = ""; i++; while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
+function rulerPath(len, step, heights, t) {
+  let p = "M0 0h" + len + "v" + t + "H0z";
+  for (let x = 0, k = 0; x <= len - t; x += step, k++) p += "M" + x + " 0h" + t + "v" + heights[k % heights.length] + "h-" + t + "z";
+  return p + "M" + (len - t) + " 0h" + t + "v" + heights[0] + "h-" + t + "z";
+}
+const EVENT_NOUN = { "Wedding": "wedding", "Engagement party": "engagement party", "Birthday": "birthday", "Anniversary": "anniversary", "Baby shower": "baby shower", "Other celebration": "celebration", "Brand / corporate": "event", "Expo / show": "show", "Market / fair": "market" };
+const eventName = b => b.client + (/s$/i.test(b.client) ? "’ " : "’s ") + (EVENT_NOUN[b.type] || "event");
+
+/* ---------- reading the Sheet ---------- */
+function parseSetup(s) {
+  const out = { packages: [], extras: [], rates: { sticker: 40, fuel: 30, gen: 50, fee: 0 }, deposit: 150, bond: 250, big: 0, lists: {} };
+  const ph = s.findIndex(r => r && txt(r[1]) === "Package");
+  if (ph >= 0) {
+    const head = s[ph].map(txt);
+    for (let i = ph + 1; i < s.length && txt(s[i] && s[i][1]); i++) {
+      const r = s[i], inc = [];
+      for (let c = 7; c <= 14; c++) if (txt(r[c])) inc.push(head[c]);
+      out.packages.push({ name: txt(r[1]), for: txt(r[2]), price: txt(r[3]) === "" ? null : num(r[3]), hours: txt(r[4]) === "" ? null : num(r[4]), bond: txt(r[5]), inc });
+    }
+    for (let c = 16; c < head.length; c++) {
+      if (!head[c]) continue;
+      const vals = [];
+      for (let i = ph + 1; i < Math.min(s.length, ph + 14); i++) { const v = txt(s[i] && s[i][c]); if (v) vals.push(v); }
+      out.lists[head[c]] = vals;
+    }
+  }
+  const eh = s.findIndex(r => r && txt(r[1]) === "Extra");
+  if (eh >= 0) for (let i = eh + 1; i < s.length && txt(s[i] && s[i][1]); i++) out.extras.push({ name: txt(s[i][1]).replace(" (default)", ""), price: num(s[i][2]), per: txt(s[i][3]) });
+  for (const r of s) {
+    if (!r) continue; const l = txt(r[1]);
+    if (l === "Board sticker print") out.rates.sticker = num(r[2]);
+    else if (l === "Fuel") out.rates.fuel = num(r[2]);
+    else if (l === "Generator hire") out.rates.gen = num(r[2]);
+    else if (l === "Extra cost per booking") out.rates.fee = num(r[2]);
+    else if (l.indexOf("Deposit") === 0) out.deposit = num(r[2]);
+    else if (l === "Refundable bond") out.bond = num(r[2]);
+  }
+  const bh = s.findIndex(r => r && txt(r[1]) === "What");
+  if (bh >= 0) for (let i = bh + 1; i < Math.min(s.length, bh + 21); i++) out.big += num(s[i] && s[i][3]);
+  return out;
+}
+
+function normalise(raw) {
+  const bk = raw.bookings, hr = bk.findIndex(r => r && txt(r[0]) === "Client name");
+  if (hr < 0) throw { code: "format" };
+  const H = {}; bk[hr].forEach((h, i) => { if (txt(h) && !(txt(h) in H)) H[txt(h)] = i; });
+  const setup = parseSetup(raw.setup || []), today = todayIso(), list = [];
+  let lastRow = hr + 1, maxInv = 0;
+  for (let i = hr + 1; i < bk.length; i++) {
+    const r = bk[i]; if (!r || !txt(r[H["Client name"]])) continue;
+    const g = k => txt(r[H[k]]), n = k => num(r[H[k]]);
+    const pkg = setup.packages.find(p => p.name === g("Package"));
+    const b = {
+      row: i + 1, client: g("Client name"), date: fromSerial(r[H["Event date"]]), phone: g("Phone"), email: g("Email"), insta: g("Instagram"),
+      source: g("How they found us"), type: g("Event type"), venue: g("Venue"), suburb: g("Suburb"), region: g("Region"), pkg: g("Package"),
+      total: n("Total"), received: n("Received"), running: n("Running costs"), other: n("Other costs"), profit: n("Profit"),
+      invoice: g("Invoice no."), cancelled: g("Cancelled") === "Yes", bond: g("Bond"), videos: g("Videos sent") === "Yes", guests: n("Guest messages"),
+      offers: g("OK to send offers"), clips: g("Clips OK to share"), review: g("Review"), notes: g("Notes"), power: g("No power point") === "Yes",
+      bondApplies: !!pkg && pkg.bond === "Yes", extras: []
+    };
+    [["Highlight reel", "highlight reel"], ["Custom board & screen", "custom board and screen"], ["Floral styling", "floral styling"], ["No power point", "battery power"], ["Second event", "second event"]]
+      .forEach(([k, l]) => { if (g(k) === "Yes") b.extras.push(l); });
+    if (n("Host hours")) b.extras.push("host for " + plural(n("Host hours"), "hour"));
+    if (n("Extra hours")) b.extras.push(plural(n("Extra hours"), "extra hour"));
+    if (n("Extra days")) b.extras.push(plural(n("Extra days"), "extra day"));
+    if (n("Travel fee")) b.extras.push(money(n("Travel fee")) + " travel");
+    b.owing = b.cancelled ? 0 : Math.max(0, b.total - b.received);
+    b.status = b.cancelled ? "Cancelled" : !b.date ? "Date needed" : b.date < today ? "Completed"
+      : (b.received >= setup.deposit || (b.total > 0 && b.received >= b.total)) ? "Booked" : "Held";
+    b.revenue = b.cancelled ? b.received : b.total;
+    b.where = [b.venue, b.suburb].filter(Boolean).join(", ");
+    const m = /^INV-(\d{4})$/.exec(b.invoice); if (m) maxInv = Math.max(maxInv, +m[1]);
+    lastRow = i + 1; list.push(b);
+  }
+  const D = { H, setup, today, bookings: list, nextRow: lastRow + 1, nextInvoice: "INV-" + String(maxInv + 1).padStart(4, "0") };
+  D.upcoming = list.filter(b => b.status === "Booked" || b.status === "Held").sort((a, b) => a.date < b.date ? -1 : 1);
+  D.next = D.upcoming[0] || null;
+
+  /* to-do list */
+  const T = [], bondTxt = money(setup.bond);
+  const add = (b, o) => { o.b = b; o.overdue = !!o.due && o.due < today; T.push(o); };
+  for (const b of list) {
+    if (b.status === "Held") add(b, { title: "Get the " + money(setup.deposit) + " deposit", detail: "Holds " + (b.date ? fmt(b.date) : "the date"), act: "payment", btn: "Payment received", g: 1 });
+    if (b.status === "Booked") {
+      const needBond = b.bondApplies && !b.bond;
+      if (b.owing > 0 || needBond) add(b, {
+        title: b.owing > 0 && needBond ? "Balance and bond due" : b.owing > 0 ? "Balance due" : "Bond due",
+        detail: [b.owing > 0 ? money(b.owing) : "", needBond ? bondTxt + " bond" : ""].filter(Boolean).join(" + "),
+        due: addDays(b.date, -7), act: "payment", btn: "Payment received", g: 1, sum: b.owing + (needBond ? setup.bond : 0)
+      });
+    }
+    if ((b.status === "Booked" || b.status === "Held" || b.status === "Completed") && !b.invoice)
+      add(b, { title: "Send the invoice", detail: money(b.total) + " total, number " + D.nextInvoice, act: "invoice", btn: "Invoice sent", g: 2 });
+    if (b.status === "Completed") {
+      if (b.owing > 0) add(b, { title: "Chase the payment", detail: money(b.owing) + " still owed from the event", due: b.date, act: "payment", btn: "Payment received", g: 1 });
+      if (!b.videos) add(b, { title: "Send the videos", detail: "Every video within 48 hours", due: addDays(b.date, 2), act: "videos", btn: "Videos sent", g: 1 });
+      if (b.bond === "Held") add(b, { title: "Refund the bond", detail: bondTxt + " back to the account it came from", due: addDays(b.date, 7), act: "bond", btn: "Bond refunded", g: 1 });
+      else if (b.videos && b.owing <= 0) {
+        if (!b.review || b.review === "None yet") add(b, { title: "Ask for a review", detail: "Event was " + fmt(b.date), act: "review", btn: "Review received", g: 3 });
+        else if (!b.offers || !b.clips) add(b, { title: "Ask about offers and clips", detail: "Can we send offers, and share their clips?", act: "perms", btn: "Record the answer", g: 4 });
+      }
+    }
+    if (b.status === "Cancelled" && b.bond === "Held") add(b, { title: "Refund the bond", detail: bondTxt + " back, booking cancelled", act: "bond", btn: "Bond refunded", g: 1 });
+  }
+  const soon = addDays(today, 7);
+  D.now = T.filter(t => !t.due || t.due <= soon).sort((a, b) => (b.overdue - a.overdue) || ((a.due ? 0 : 1) - (b.due ? 0 : 1)) || (a.due && b.due ? (a.due < b.due ? -1 : a.due > b.due ? 1 : 0) : a.g - b.g));
+  D.later = T.filter(t => t.due && t.due > soon).sort((a, b) => a.due < b.due ? -1 : 1);
+  D.todos = T;
+
+  /* money */
+  const done = list.filter(b => b.status === "Completed"), canc = list.filter(b => b.status === "Cancelled"), R = setup.rates;
+  const sum = (a, f) => a.reduce((t, x) => t + f(x), 0);
+  const costs = [
+    ["Board stickers", done.length, R.sticker], ["Fuel", done.length, R.fuel], ["Generator hire", done.filter(b => b.power).length, R.gen]
+  ].map(([l, c, e]) => ({ label: l, count: c, each: e, total: c * e }));
+  if (R.fee) costs.push({ label: "Extra cost per booking", count: done.length, each: R.fee, total: done.length * R.fee });
+  const other = sum(done, b => b.other) + sum(canc, b => b.other);
+  costs.push({ label: "Other booking costs", total: other }, { label: "Big purchases", total: setup.big });
+  const revenue = sum(done, b => b.total) + sum(canc, b => b.received), costTotal = sum(costs, c => c.total);
+  D.money = {
+    revenue, costs, costTotal, profit: revenue - costTotal, toCome: sum(D.upcoming, b => b.owing), owed: sum(done, b => b.owing),
+    owedCount: done.filter(b => b.owing > 0).length, ahead: sum(D.upcoming, b => b.total), done: done.length, guests: sum(list, b => b.guests),
+    avg: done.length ? sum(done, b => b.profit) / done.length : 0
+  };
+  const year = +today.slice(0, 4);
+  D.year = year;
+  D.months = MO.map((m, i) => { const xs = list.filter(b => b.date && dParts(b.date).y === year && dParts(b.date).m === i); return { m, events: xs.filter(b => !b.cancelled).length, revenue: sum(xs, b => b.revenue), profit: sum(xs, b => b.profit) }; });
+
+  /* clients */
+  const by = new Map();
+  for (const b of list) {
+    const c = by.get(b.client) || { name: b.client, n: 0, paid: 0, last: null, source: "", review: "", offers: "", clips: "", row: b.row };
+    if (!b.cancelled) c.n++;
+    c.paid += b.received; if (b.date && (!c.last || b.date > c.last)) c.last = b.date;
+    c.source = c.source || b.source; if (b.review && b.review !== "None yet") c.review = b.review;
+    c.offers = b.offers || c.offers; c.clips = b.clips || c.clips; c.row = b.row; by.set(b.client, c);
+  }
+  D.clients = [...by.values()];
+  return D;
+}
+
+/* ---------- drawing ---------- */
+let D = null;
+const cell = (key, b) => colLetter(D.H[key]) + b.row;
+const cellUrl = ref => SHEET_URL + "#gid=" + GID_BOOKINGS + "&range=" + ref;
+
+function drawNext() {
+  const b = D.next, el = $("#next");
+  if (!b) { el.innerHTML = "<h1>No events booked yet</h1><p class=\"where\">When a booking goes into the Sheet, its countdown shows up here.</p>"; return; }
+  const n = diff(b.date, D.today), t = D.todos.find(x => x.b === b && x.act === "payment");
+  const head = n === 0 ? "Today: " + eventName(b) : n === 1 ? "Tomorrow: " + eventName(b) : n + " days to " + eventName(b);
+  const pack = [b.pkg].concat(b.extras).filter(Boolean).join(", ");
+  let owed = b.owing <= 0 ? "Paid in full" + (b.bondApplies ? (b.bond ? ", bond " + b.bond.toLowerCase() : ", bond still to come") : "") : "";
+  if (t) owed = t.detail + (t.due ? (t.overdue ? " was due " : " due ") + fmt(t.due) : " to hold the date");
+  el.innerHTML = "<h1>" + esc(head) + "</h1>" +
+    "<p class=\"where\">" + esc(fmt(b.date)) + (b.where ? " at " + esc(b.where) : "") + ". " + esc(pack) + ".</p>" +
+    "<div class=\"owed\"><span>" + esc(owed) + "</span>" +
+    (t ? "<button class=\"btn\" type=\"button\" data-act=\"payment\" data-row=\"" + b.row + "\">Payment received</button>" : "") +
+    "<button class=\"btn ghost\" type=\"button\" data-book=\"" + b.row + "\">Details and updates</button></div>";
+}
+
+function drawTape() {
+  const box = $("#tape"), today = D.today, start = addDays(today, -10);
+  const dated = D.bookings.filter(b => b.date && !b.cancelled);
+  const lastUp = D.upcoming.length ? D.upcoming[D.upcoming.length - 1].date : today;
+  let days = Math.max(diff(lastUp, start) + 14, 60, Math.floor(((box.clientWidth || 900) - 2) / W));
+  days = Math.min(days, 400);
+  const end = addDays(start, days), x = iso => diff(iso, start) * W;
+  let h = "<div class=\"t-rule\"></div><div class=\"t-days\"></div>";
+  for (let i = 0; i <= days; i++) {
+    const iso = addDays(start, i), p = dParts(iso), isNow = iso === today;
+    if (isNow) h += "<div class=\"t-tick now\" style=\"left:" + i * W + "px\"></div><div class=\"t-lab now\" style=\"left:" + i * W + "px;transform:translateX(-50%)\">today</div>";
+    else if (p.d === 1) h += "<div class=\"t-tick mo\" style=\"left:" + i * W + "px\"></div><div class=\"t-lab mo\" style=\"left:" + i * W + "px\">" + p.mo + "</div>";
+    else if (p.dow === 1) h += "<div class=\"t-tick wk\" style=\"left:" + i * W + "px\"></div>";
+    if (p.dow === 1 && !isNow) h += "<div class=\"t-lab\" style=\"left:" + i * W + "px\">" + p.d + "</div>";
+  }
+  /* flags above the rule, in lanes so labels never overlap */
+  const lanes = [-1e9, -1e9];
+  dated.filter(b => b.date >= start && b.date <= end).sort((a, b) => a.date < b.date ? -1 : 1).forEach(b => {
+    const label = b.client.split(" ")[0] + " " + fmtShort(b.date), w = label.length * 7.2 + 18, px = x(b.date);
+    let l = lanes.findIndex(r => r + 8 < px); if (l < 0) l = lanes[0] <= lanes[1] ? 0 : 1;
+    lanes[l] = px + w;
+    const top = l === 0 ? 30 : 0;
+    h += "<div class=\"t-stem\" style=\"left:" + px + "px;top:" + (top + 24) + "px;height:" + (84 - top - 24) + "px\"></div>" +
+      "<button type=\"button\" class=\"t-flag" + (b.date < today ? " past" : "") + "\" style=\"left:" + px + "px;top:" + top + "px\" data-book=\"" + b.row + "\" title=\"" + esc(b.client + ", " + fmt(b.date)) + "\">" + esc(label) + "</button>";
+  });
+  if (D.next && D.next.date > today) {
+    const n = diff(D.next.date, today);
+    h += "<div class=\"t-dim\" style=\"left:" + x(today) + "px;width:" + n * W + "px\"><span>" + plural(n, "day") + "</span></div>";
+  }
+  /* payment and delivery dates under the rule */
+  const dl = [-1e9, -1e9];
+  D.todos.filter(t => t.due && t.due >= start && t.due <= end).sort((a, b) => a.due < b.due ? -1 : 1).forEach(t => {
+    const label = t.act === "payment" ? (t.sum ? money(t.sum) : "payment") + " due" : t.act === "videos" ? "videos due" : "bond back";
+    const w = label.length * 6.6, px = x(t.due);
+    let l = dl.findIndex(r => r + 10 < px - w / 2); if (l < 0) l = dl[0] <= dl[1] ? 0 : 1;
+    dl[l] = px + w / 2;
+    h += "<div class=\"t-due" + (t.overdue ? " late" : "") + "\" style=\"left:" + px + "px\"></div>" +
+      "<div class=\"t-duelab" + (t.overdue ? " late" : "") + "\" style=\"left:" + px + "px;top:" + (142 + l * 20) + "px\">" + esc(label) + "</div>";
+  });
+  box.innerHTML = "<div class=\"tape-in\" style=\"width:" + (days * W + 2) + "px\">" + h + "</div>";
+}
+
+function jobRow(t, later) {
+  const n = t.due ? diff(t.due, D.today) : null;
+  const when = t.due ? "<b>" + fmtShort(t.due) + "</b><span>" + (t.overdue ? plural(-n, "day") + " overdue" : inDays(n)) + "</span>" : "<b>Any time</b><span>no deadline</span>";
+  return "<li class=\"job" + (t.overdue ? " late" : later ? " later" : "") + "\"><div class=\"when\">" + when + "</div>" +
+    "<div class=\"what\"><b>" + esc(t.title) + "</b><span><button class=\"linkish\" style=\"font-weight:700\" type=\"button\" data-book=\"" + t.b.row + "\">" + esc(t.b.client) + "</button>, " + esc(t.detail) + "</span></div>" +
+    "<button class=\"btn" + (later ? " ghost" : "") + "\" type=\"button\" data-act=\"" + t.act + "\" data-row=\"" + t.b.row + "\">" + esc(t.btn) + "</button></li>";
+}
+function drawTodo() {
+  const late = D.now.filter(t => t.overdue).length;
+  let h = "<h2 id=\"h-todo\">to do now</h2><p class=\"lede\">" + (D.now.length ? plural(D.now.length, "job") + (late ? ", " + late + " overdue" : "") + ". Most urgent first." : "Nothing needs doing right now.") + "</p>";
+  h += "<ul class=\"rows\">" + (D.now.map(t => jobRow(t)).join("") || "<li class=\"empty\">All clear. New jobs appear here as dates get close.</li>") + "</ul>";
+  if (D.later.length) h += "<p class=\"subhead\">Coming due</p><ul class=\"rows\">" + D.later.map(t => jobRow(t, true)).join("") + "</ul>";
+  $("#todo").innerHTML = h;
+}
+
+function drawComing() {
+  let h = "<h2 id=\"h-coming\">coming up</h2><p class=\"lede\">" + (D.upcoming.length ? plural(D.upcoming.length, "event") + " booked, worth " + money(D.money.ahead) + "." : "No events booked yet.") + "</p><ul class=\"rows\">";
+  h += D.upcoming.map(b => {
+    const p = dParts(b.date), pct = b.total > 0 ? Math.min(100, b.received / b.total * 100) : 0, dep = b.total > 0 ? Math.min(100, D.setup.deposit / b.total * 100) : 0;
+    const due = addDays(b.date, -7);
+    const bond = !b.bondApplies ? "<span class=\"chip\">No bond needed</span>" : b.bond === "Held" ? "<span class=\"chip ok\">Bond held</span>" : b.bond ? "<span class=\"chip ok\">Bond " + esc(b.bond.toLowerCase()) + "</span>" : "<span class=\"chip\">Bond " + money(D.setup.bond) + " not paid yet</span>";
+    const state = b.status === "Held" ? "<span class=\"chip tape\">Waiting on deposit</span> " : "";
+    return "<li class=\"gig\"><div class=\"day\"><b>" + p.d + "</b><span>" + p.mo + ", " + p.wd + "</span></div><div>" +
+      "<div class=\"head\"><button class=\"linkish\" type=\"button\" data-book=\"" + b.row + "\">" + esc(b.client) + "</button><span>" + inDays(diff(b.date, D.today)) + "</span></div>" +
+      "<p>" + esc([b.type, b.where].filter(Boolean).join(" at ")) + "</p><p>" + esc([b.pkg].concat(b.extras).filter(Boolean).join(", ")) + "</p>" +
+      "<div class=\"paid\" role=\"img\" aria-label=\"" + money(b.received) + " of " + money(b.total) + " paid\"><i style=\"width:" + pct + "%\"></i>" + (dep < 100 ? "<em style=\"left:" + dep + "%\" title=\"Deposit\"></em>" : "") + "</div>" +
+      "<div class=\"cap\"><span><b>" + money(b.received) + "</b> of " + money(b.total) + " paid" + (b.owing > 0 ? ". " + money(b.owing) + " due " + fmt(due) : "") + "</span><span>" + state + bond + "</span></div></div></li>";
+  }).join("") || "<li class=\"empty\">Add a booking in the Sheet and it shows up here.</li>";
+  $("#coming").innerHTML = h + "</ul>";
+}
+
+function drawMoney() {
+  const M = D.money, max = Math.max(1, ...D.months.map(m => Math.max(m.revenue, m.profit)));
+  const nowM = dParts(D.today).m;
+  let h = "<h2 id=\"h-money\">money</h2><p class=\"lede\">" + plural(M.done, "event") + " done, " + M.guests.toLocaleString("en-NZ") + " guest messages recorded.</p>" +
+    "<div class=\"profit\"><div>Profit to date</div><b" + (M.profit < 0 ? " style=\"color:var(--late)\"" : "") + ">" + money(M.profit) + "</b><span>" + money(M.revenue) + " earned, less " + money(M.costTotal) + " in costs. About " + money(M.avg) + " an event.</span></div>" +
+    "<dl class=\"ledger\">" +
+    "<div><dt>Still to come in<small>balances on booked events, bonds not counted</small></dt><dd>" + money(M.toCome) + "</dd></div>" +
+    "<div" + (M.owed > 0 ? " class=\"late\"" : "") + "><dt>Owed to you<small>" + (M.owed > 0 ? plural(M.owedCount, "past event") + " not fully paid" : "nobody owes you anything") + "</small></dt><dd>" + money(M.owed) + "</dd></div>" +
+    "<div><dt>Booked ahead<small>value of upcoming events</small></dt><dd>" + money(M.ahead) + "</dd></div></dl>" +
+    "<h3>" + D.year + " by month, including what’s booked</h3><div class=\"months\" role=\"img\" aria-label=\"Revenue and profit by month\">" +
+    D.months.map(m => "<div>" + (m.revenue ? "<small>" + money(m.revenue) + "</small>" : "") + "<span class=\"bars\"><i style=\"height:" + Math.round(m.revenue / max * 104) + "px\"></i><i style=\"height:" + Math.round(Math.max(0, m.profit) / max * 104) + "px\"></i></span></div>").join("") +
+    "</div><div class=\"mlabs\">" + D.months.map((m, i) => i === nowM ? "<b>" + m.m + "</b>" : "<span>" + m.m + "</span>").join("") + "</div>" +
+    "<div class=\"key\"><span><i></i>Revenue</span><span><i></i>Profit</span></div>" +
+    "<h3>Costs to date</h3><table><tbody>" +
+    M.costs.map(c => "<tr><td>" + esc(c.label) + "</td><td class=\"n\" style=\"color:var(--mute)\">" + (c.each != null ? c.count + " × " + money(c.each) : "") + "</td><td class=\"n\">" + money(c.total) + "</td></tr>").join("") +
+    "<tr class=\"sum\"><td>Total</td><td></td><td class=\"n\">" + money(M.costTotal) + "</td></tr></tbody></table>";
+  $("#money").innerHTML = h;
+}
+
+function drawHandy() {
+  const S = D.setup;
+  $("#handy").innerHTML = "<h2 id=\"h-handy\">handy</h2><p class=\"lede\">The things you reach for most.</p>" +
+    "<div class=\"inv\"><div><span>Next invoice number</span><b>" + D.nextInvoice + "</b></div><button class=\"btn ghost\" type=\"button\" data-copy=\"" + D.nextInvoice + "\">Copy " + D.nextInvoice + "</button></div>" +
+    "<div class=\"links\"><a class=\"btn ghost\" href=\"" + FOLDERS.invoices + "\" target=\"_blank\" rel=\"noopener\">Client invoices folder</a><a class=\"btn ghost\" href=\"" + FOLDERS.videos + "\" target=\"_blank\" rel=\"noopener\">Client videos folder</a>" +
+    "<a class=\"btn ghost\" href=\"" + FOLDERS.cards + "\" target=\"_blank\" rel=\"noopener\">Pricing cards to send</a><a class=\"btn ghost\" href=\"" + SHEET_URL + "\" target=\"_blank\" rel=\"noopener\">The Google Sheet</a></div>" +
+    "";
+  $("#prices").innerHTML = "<h2 id=\"h-prices\">prices</h2><p class=\"lede\">Straight from the Setup tab of your Sheet.</p><div class=\"cols\"><div>" +
+    "<h3>Packages</h3><table><tbody>" + S.packages.filter(p => p.price != null).map(p => "<tr><td><b style=\"font-weight:800\">" + esc(p.name) + "</b><br><span style=\"color:var(--mute);font-size:14px\">" + esc(p.for.replace(/ \(.*\)/, "")) + ", up to " + plural(p.hours, "hour") + "</span></td><td class=\"n\" style=\"font-weight:800\">" + money(p.price) + "</td></tr>").join("") + "</tbody></table></div><div>" +
+    "<h3>Extras</h3><table><tbody>" + S.extras.map(e => "<tr><td>" + esc(e.name) + "</td><td class=\"n\">" + money(e.price) + (e.per && e.per !== "each" ? " " + esc(e.per) : "") + "</td></tr>").join("") + "</tbody></table>" +
+    "<p class=\"note\">" + money(S.deposit) + " deposit holds a date. Balance and " + money(S.bond) + " refundable bond are due 7 days before. Not GST registered, so no GST on anything.</p></div></div>";
+}
+
+function drawClients() {
+  const cs = D.clients, src = {};
+  cs.forEach(c => { if (c.source) src[c.source] = (src[c.source] || 0) + 1; });
+  const top = Object.entries(src).sort((a, b) => b[1] - a[1]).map(([k, v]) => v + " from " + k).join(", ");
+  const yes = v => v === "Yes" ? "<span class=\"chip ok\">Yes</span>" : v ? "<span class=\"chip\">" + esc(v) + "</span>" : "<span style=\"color:var(--mute)\">Not asked</span>";
+  $("#clients").innerHTML = "<h2 id=\"h-clients\">clients</h2><p class=\"lede\">" + plural(cs.length, "client") + (top ? ", " + top : "") + ". " + plural(cs.filter(c => c.n > 1).length, "repeat client") + ", " + plural(cs.filter(c => c.review).length, "review") + " collected.</p>" +
+    "<div class=\"scroll\"><table><thead><tr><th>Client</th><th>Found us through</th><th class=\"n\" style=\"padding-right:12px\">Bookings</th><th class=\"n\" style=\"padding-right:12px\">Paid so far</th><th>Last event</th><th>Review</th><th>Offers OK</th><th>Clips OK</th></tr></thead><tbody>" +
+    cs.map(c => "<tr><td><button class=\"linkish\" type=\"button\" data-book=\"" + c.row + "\">" + esc(c.name) + "</button></td><td>" + (esc(c.source) || "<span style=\"color:var(--mute)\">Not recorded</span>") + "</td><td class=\"n\" style=\"padding-right:12px\">" + c.n + (c.n > 1 ? " <span class=\"chip tape\">Repeat</span>" : "") + "</td><td class=\"n\" style=\"padding-right:12px\">" + money(c.paid) + "</td><td>" + (c.last ? fmt(c.last) + " " + dParts(c.last).y : "") + "</td><td>" + (c.review ? "<span class=\"chip ok\">" + esc(c.review) + "</span>" : "<span style=\"color:var(--mute)\">None yet</span>") + "</td><td>" + yes(c.offers) + "</td><td>" + yes(c.clips) + "</td></tr>").join("") +
+    "</tbody></table></div>";
+}
+
+function draw() {
+  drawNext(); drawTape(); drawTodo(); drawComing(); drawMoney(); drawHandy(); drawClients();
+  $("#openSheet").href = SHEET_URL + "#gid=" + GID_BOOKINGS;
+  $("#foot").textContent = "Everything here comes from your Google Sheet, and every save goes straight back into it. The Sheet is the record.";
+  window.__numbers = { profit: D.money.profit, revenue: D.money.revenue, toCome: D.money.toCome, ahead: D.money.ahead, done: D.money.done, guests: D.money.guests, next: D.next && D.next.client + " " + D.next.date, nextInvoice: D.nextInvoice, now: D.now.length, later: D.later.length };
+}
+
+/* ---------- saving to the Sheet ---------- */
+const dlg = $("#dlg");
+let form = null, busy = false, readAt = 0;
+const API = "https://script.google.com/macros/s/AKfycbzCra4_DGK7YZMKPBBS1mwfPN870vUasYZ6zdiP_5MyhSZnLIWBhMCH-CDFu4oG2LYY/exec";
+let KEY = (/[#&]k=([^&]+)/.exec(location.hash) || [])[1] || "";
+try { if (KEY) localStorage.setItem("wmhb.k", KEY); else KEY = localStorage.getItem("wmhb.k") || ""; } catch (e) {}
+const server = async (fn, arg) => {
+  const res = await fetch(API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ k: KEY, fn, arg }), credentials: "omit", redirect: "follow" });
+  if (!res.ok) throw new Error("the Sheet answered with error " + res.status);
+  const j = await res.json();
+  if (!j.ok) throw new Error(j.error);
+  return j.result;
+};
+const opts = (name, fallback) => (D.setup.lists[name] && D.setup.lists[name].length ? D.setup.lists[name] : fallback);
+const field = (key, kind, label, o) => Object.assign({ key, kind, label, cur: "", value: "" }, o || {});
+
+function fieldsFor(kind, b) {
+  const S = D.setup, bondOpts = opts("Bond", ["Held", "Returned", "Part kept"]), perm = opts("Permission", ["Yes", "No", "Asked"]);
+  if (kind === "payment") {
+    const f = [field("Received", "sum", "Amount that came in for the hire", { cur: b.received, value: b.status === "Held" ? S.deposit : (b.owing || ""), hint: "Hire money only. The bond is recorded on its own." })];
+    if (b.bondApplies) f.push(field("Bond", "pick", "Bond (" + money(S.bond) + ")", { cur: b.bond, value: b.bond, options: bondOpts, blank: "Not paid yet", hint: "Choose Held once the bond has landed." }));
+    return ["Payment received", f];
+  }
+  if (kind === "bond") return ["Bond", [field("Bond", "pick", "Where the bond is now", { cur: b.bond, value: b.bond === "Held" ? "Returned" : "Held", options: bondOpts, blank: "Not paid yet" })]];
+  if (kind === "invoice") return ["Invoice sent", [field("Invoice no.", "text", "Invoice number", { cur: b.invoice, value: b.invoice || D.nextInvoice })]];
+  if (kind === "videos") return ["Videos sent", [field("Videos sent", "yes", "All the videos have been sent", { cur: b.videos ? "Yes" : "", value: "Yes" }), field("Guest messages", "num", "How many messages were recorded", { cur: b.guests ? String(b.guests) : "", value: b.guests || "" })]];
+  if (kind === "review") return ["Review", [field("Review", "pick", "What they gave you", { cur: b.review, value: b.review, options: opts("Review", ["Google review", "Instagram", "Written testimonial", "Video testimonial", "None yet"]), blank: "Nothing recorded" })]];
+  if (kind === "perms") return ["Offers and clips", [field("OK to send offers", "pick", "OK to send them offers", { cur: b.offers, value: b.offers, options: perm, blank: "Not asked" }), field("Clips OK to share", "pick", "OK to share their clips", { cur: b.clips, value: b.clips, options: perm, blank: "Not asked" })]];
+  if (kind === "cancel") return ["Cancel this booking", [field("Cancelled", "yes", "This booking is cancelled", { cur: b.cancelled ? "Yes" : "", value: "Yes", hint: "Profit then counts only the money you kept." })]];
+  if (kind === "details") return ["Venue and details", [
+    field("Event date", "date", "Event date", { cur: b.date || "", value: b.date || "" }),
+    field("Region", "pick", "Region", { cur: b.region, value: b.region, options: opts("Region", ["Auckland", "Hamilton"]), blank: "Not set" }),
+    field("Venue", "text", "Venue", { cur: b.venue, value: b.venue }), field("Suburb", "text", "Suburb", { cur: b.suburb, value: b.suburb }),
+    field("No power point", "yes", "No power point at the venue, so battery power is needed", { cur: b.power ? "Yes" : "", value: b.power ? "Yes" : "", wide: true }),
+    field("Phone", "text", "Phone", { cur: b.phone, value: b.phone }), field("Email", "text", "Email", { cur: b.email, value: b.email }),
+    field("Instagram", "text", "Instagram", { cur: b.insta, value: b.insta })]];
+  return ["Notes", [field("Notes", "note", "Notes for this booking", { cur: b.notes, value: b.notes, wide: true })]];
+}
+function newFields() {
+  const S = D.setup;
+  return [
+    field("Client name", "text", "Client name", { wide: true, hint: "A repeat client? Type the name exactly as before." }),
+    field("Event date", "date", "Event date"), field("Event type", "pick", "Event type", { options: opts("Event type", ["Wedding", "Birthday"]), blank: "Choose" }),
+    field("Package", "pick", "Package", { options: S.packages.map(p => p.name), blank: "Choose" }),
+    field("Custom price", "num", "Custom price", { hint: "Only for the Custom package." }),
+    field("Venue", "text", "Venue"), field("Suburb", "text", "Suburb"),
+    field("Region", "pick", "Region", { options: opts("Region", ["Auckland", "Hamilton"]), blank: "Choose", value: "Auckland" }),
+    field("How they found us", "pick", "How they found us", { options: opts("How they found us", ["Instagram", "Referral"]), blank: "Not sure" }),
+    field("Custom board & screen", "yes", "Custom board and screen"), field("Highlight reel", "yes", "Highlight reel"),
+    field("No power point", "yes", "No power point, so battery power"), field("Second event", "yes", "Second event"),
+    field("Extra hours", "num", "Extra hours"), field("Host hours", "num", "Host hours"), field("Extra days", "num", "Extra days"),
+    field("Travel fee", "num", "Travel fee ($)"), field("Discount", "num", "Discount ($)"),
+    field("Phone", "text", "Phone"), field("Email", "text", "Email"), field("Instagram", "text", "Instagram"),
+    field("Notes", "note", "Notes", { wide: true })
+  ];
+}
+function control(f, i) {
+  const id = "f" + i, lab = "<label for=\"" + id + "\">" + esc(f.label) + "</label>", hint = f.hint ? "<small>" + esc(f.hint) + "</small>" : "";
+  if (f.kind === "yes") return "<div class=\"fld tick" + (f.wide ? " wide" : "") + "\"><input id=\"" + id + "\" type=\"checkbox\"" + (f.value === "Yes" ? " checked" : "") + ">" + lab + hint + "</div>";
+  let c;
+  if (f.kind === "pick") c = "<select id=\"" + id + "\">" + (f.blank ? "<option value=\"\">" + esc(f.blank) + "</option>" : "") + f.options.map(o => "<option" + (o === f.value ? " selected" : "") + ">" + esc(o) + "</option>").join("") + "</select>";
+  else if (f.kind === "note") c = "<textarea id=\"" + id + "\">" + esc(f.value) + "</textarea>";
+  else if (f.kind === "date") c = "<input id=\"" + id + "\" type=\"date\" value=\"" + esc(f.value) + "\">";
+  else if (f.kind === "num" || f.kind === "sum") c = "<input id=\"" + id + "\" type=\"number\" inputmode=\"decimal\" min=\"0\" step=\"any\" value=\"" + esc(f.value) + "\">";
+  else c = "<input id=\"" + id + "\" type=\"text\" autocomplete=\"off\" value=\"" + esc(f.value) + "\">";
+  return "<div class=\"fld" + (f.wide ? " wide" : "") + "\">" + lab + c + hint + "</div>";
+}
+const show = (f, v) => v === "" ? "empty" : f.kind === "date" ? fmt(v) + " " + v.slice(0, 4) : f.kind === "note" && v.length > 60 ? v.slice(0, 60) + "…" : v;
+function pending() {
+  const out = { changes: [], lines: [], fields: {} };
+  form.fields.forEach((f, i) => {
+    const el = $("#f" + i, dlg), v = f.kind === "yes" ? (el.checked ? "Yes" : "") : el.value.trim();
+    const ref = form.b ? " (" + colLetter(D.H[f.key]) + form.b.row + ")" : "";
+    if (f.kind === "sum") {
+      const n = num(v); if (n > 0) { out.changes.push({ h: f.key, v: n, add: true }); out.lines.push(f.key + ref + ": " + money(f.cur) + " becomes " + money(f.cur + n)); }
+    } else if (form.b ? v !== String(f.cur) : v !== "") {
+      out.changes.push({ h: f.key, v }); out.fields[f.key] = v;
+      out.lines.push(f.key + ref + ": " + (form.b ? show(f, String(f.cur)) + " becomes " + show(f, v) : show(f, v)));
+    }
+  });
+  return out;
+}
+function paint() {
+  const p = pending(), ok = form.b ? p.changes.length > 0 : !!(p.fields["Client name"] && p.fields["Event date"] && p.fields["Package"]);
+  $("#sum", dlg).innerHTML = p.lines.map(l => "<li>" + esc(l) + "</li>").join("") || "<li class=\"none\">" + (form.b ? "Nothing changed yet." : "Nothing filled in yet.") + "</li>";
+  $("#need", dlg).textContent = !form.b && !ok ? "A new booking needs a client name, an event date and a package." : "";
+  $("#save", dlg).disabled = !ok;
+}
+function openForm(title, sub, fields, b) {
+  form = { fields, b };
+  dlg.innerHTML = head(title, sub) + "<form class=\"d-body\" id=\"frm\" novalidate><div class=\"fields\">" + fields.map(control).join("") + "</div>" +
+    "<div class=\"sumbox\"><h3>" + (b ? "What will change in the Sheet" : "What goes into row " + D.nextRow) + "</h3><ul id=\"sum\"></ul></div>" +
+    "<p class=\"need\" id=\"need\"></p><p class=\"err\" id=\"err\" role=\"alert\"></p>" +
+    "<button class=\"btn\" type=\"submit\" id=\"save\">" + (b ? "Save to the Sheet" : "Add to the Sheet") + "</button></form>";
+  paint();
+  if (!dlg.open) dlg.showModal();
+}
+function openUpdate(kind, row) {
+  const b = D.bookings.find(x => x.row === row); if (!b) return;
+  const [title, fields] = fieldsFor(kind, b);
+  openForm(title, b.client + (b.date ? ", " + fmt(b.date) : ""), fields, b);
+}
+dlg.addEventListener("input", () => { if (form) paint(); });
+dlg.addEventListener("submit", async e => {
+  e.preventDefault(); if (!form) return;
+  const p = pending(), btn = $("#save", dlg), label = btn.textContent, err = $("#err", dlg);
+  btn.disabled = true; btn.textContent = "Saving…"; err.textContent = "";
+  try {
+    const res = JSON.parse(form.b ? await server("saveChanges", { row: form.b.row, client: form.b.client, changes: p.changes }) : await server("addBooking", p.fields));
+    apply(res.data); form = null; dlg.close();
+    toast("Saved to row " + res.row + ". " + p.lines.length + (p.lines.length === 1 ? " cell" : " cells") + " changed.");
+  } catch (x) {
+    err.textContent = "Not saved. " + ((x && x.message) || "The Sheet didn’t answer.").replace(/^Error:\s*/, "");
+    btn.disabled = false; btn.textContent = label;
+  }
+});
+function head(title, sub) {
+  return "<div class=\"d-head\"><div><h2 id=\"dlg-title\">" + esc(title) + "</h2><p>" + esc(sub) + "</p></div><button class=\"btn ghost\" type=\"button\" data-close>Close</button></div>";
+}
+function openBooking(row) {
+  const b = D.bookings.find(x => x.row === row); if (!b) return;
+  form = null;
+  const rowsHtml = [
+    ["Status", b.status], ["Event", [b.type, b.date ? fmt(b.date) + " " + dParts(b.date).y : "date needed"].filter(Boolean).join(", ")], ["Venue", b.where || "Not confirmed"],
+    ["Package", [b.pkg].concat(b.extras).filter(Boolean).join(", ")], ["Money", money(b.received) + " of " + money(b.total) + " paid" + (b.owing > 0 ? ", " + money(b.owing) + " owing" : "")],
+    ["Bond", b.bondApplies ? (b.bond || "Not paid yet") : "Not needed"], ["Invoice", b.invoice || "Not sent yet"],
+    ["Email", b.email], ["Phone", b.phone], ["Instagram", b.insta ? "@" + b.insta.replace(/^@/, "") : ""], ["Found us through", b.source],
+    ["After the event", b.status === "Completed" ? (b.videos ? "Videos sent" : "Videos not sent yet") + (b.guests ? ", " + b.guests + " messages" : "") + ", review: " + (b.review || "none yet") : ""],
+    ["Notes", b.notes]
+  ].filter(r => r[1]).map(r => "<dt>" + r[0] + "</dt><dd>" + esc(r[1]) + "</dd>").join("");
+  const acts = [["payment", "Payment received"], ["bond", "Bond paid or refunded"], ["invoice", "Invoice sent"], ["details", "Venue and details"], ["videos", "Videos sent"], ["review", "Review received"], ["perms", "Offers and clips"], ["note", "Edit the note"], ["cancel", "Cancel this booking"]];
+  dlg.innerHTML = head(b.client, "Row " + b.row + " in the Sheet") + "<div class=\"d-body\"><dl>" + rowsHtml + "</dl><div class=\"acts\">" +
+    acts.map(a => "<button class=\"btn" + (a[0] === "cancel" || a[0] === "note" ? " ghost" : "") + "\" type=\"button\" data-act=\"" + a[0] + "\" data-row=\"" + b.row + "\">" + a[1] + "</button>").join("") +
+    "<a class=\"btn ghost\" href=\"" + cellUrl("A" + b.row) + "\" target=\"_blank\" rel=\"noopener\">Open this row in the Sheet</a></div></div>";
+  if (!dlg.open) dlg.showModal();
+}
+async function copy(text, btn) {
+  const was = btn.textContent;
+  try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; }
+  catch (e) { btn.textContent = "Couldn’t copy here"; }
+  setTimeout(() => { btn.textContent = was; }, 1600);
+}
+let toastTimer;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("on"), 5000); }
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-act],[data-book],[data-copy],[data-close],[data-new]"); if (!t) { if (e.target === dlg) dlg.close(); return; }
+  if (t.dataset.close != null) dlg.close();
+  else if (t.dataset.new != null) { if (D) openForm("Add a booking", "Goes into the next empty row of the Sheet", newFields(), null); }
+  else if (t.dataset.act) openUpdate(t.dataset.act, +t.dataset.row);
+  else if (t.dataset.book) openBooking(+t.dataset.book);
+  else if (t.dataset.copy) copy(t.dataset.copy, t);
+});
+
+/* ---------- reading the Sheet ---------- */
+function fresh(msg, warn) { const el = $("#fresh"); el.textContent = msg; el.classList.toggle("warn", !!warn); }
+function apply(data) {
+  SHEET_ID = data.sheetId; GID_BOOKINGS = String(data.gid); SHEET_URL = "https://docs.google.com/spreadsheets/d/" + SHEET_ID + "/edit";
+  D = normalise(data); readAt = data.readAt; draw();
+  fresh("Live from your Sheet, read at " + clock(readAt) + ".");
+}
+async function load() {
+  if (!KEY) { fresh("This device isn’t set up yet.", true); $("#next").innerHTML = "<h1>Open your wmhb link once</h1><p class=\"where\">This device doesn’t have the key yet. Open the full private link you were sent, then add that page to your home screen.</p>"; return; }
+  if (busy) return; busy = true; $("#refresh").disabled = true; fresh("Reading your Sheet…");
+  try { apply(JSON.parse(await server("getData")).data); }
+  catch (x) {
+    const why = ((x && x.message) || "no answer").replace(/^Error:\s*/, "");
+    fresh((D ? "Showing what was read at " + clock(readAt) + ". " : "") + "Couldn’t read the Sheet (" + why + "). Press Refresh to try again.", true);
+    if (!D) $("#next").innerHTML = "<h1>Couldn’t read the Sheet</h1><p class=\"where\">" + esc(why) + ". Check your connection, then press Refresh.</p>";
+  } finally { busy = false; $("#refresh").disabled = false; }
+}
+
+/* ---------- start ---------- */
+$("#logoRuler").setAttribute("d", (() => { let p = "M0 0h500v6H0zM0 0h6v57h-6z"; for (let x = 22, k = 0; x <= 472; x += 25, k++) p += "M" + x + " 0h6v" + [23, 39, 23, 57][k % 4] + "h-6z"; return p + "M494 0h6v57h-6z"; })());
+$("#footRuler").setAttribute("d", rulerPath(936, 15, [33.5, 13.5, 23.5, 13.5], 3.5));
+$("#refresh").addEventListener("click", load);
+let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (D) drawTape(); }, 200); });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && D && !dlg.open && Date.now() - readAt > 120000) load(); });
+load();
+</script>
+</body>
+</html>
