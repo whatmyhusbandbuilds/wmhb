@@ -302,14 +302,14 @@ const eventName = b => b.client + (/s$/i.test(b.client) ? "’ " : "’s ") + (E
 
 /* ---------- reading the Sheet ---------- */
 function parseSetup(s) {
-  const out = { packages: [], extras: [], rates: { sticker: 40, fuel: 30, gen: 50, fee: 0 }, deposit: 150, bond: 250, big: 0, lists: {} };
+  const out = { packages: [], extras: [], rates: { sticker: 40, fuel: 30, gen: 50, fee: 0 }, deposit: 150, bond: 250, big: 0, lists: {}, oldTermsTo: 0 };
   const ph = s.findIndex(r => r && txt(r[1]) === "Package");
   if (ph >= 0) {
     const head = s[ph].map(txt);
     for (let i = ph + 1; i < s.length && txt(s[i] && s[i][1]); i++) {
       const r = s[i], inc = [];
       for (let c = 7; c <= 14; c++) if (txt(r[c])) inc.push(head[c]);
-      out.packages.push({ name: txt(r[1]), for: txt(r[2]), price: txt(r[3]) === "" ? null : num(r[3]), hours: txt(r[4]) === "" ? null : num(r[4]), bond: txt(r[5]), inc });
+      out.packages.push({ name: txt(r[1]), for: txt(r[2]), price: txt(r[3]) === "" ? null : num(r[3]), hours: txt(r[4]) === "" ? null : num(r[4]), bond: txt(r[5]), inc, dueDays: txt(r[15]) === "" ? null : num(r[15]) });
     }
     for (let c = 16; c < head.length; c++) {
       if (!head[c]) continue;
@@ -328,6 +328,7 @@ function parseSetup(s) {
     else if (l === "Extra cost per booking") out.rates.fee = num(r[2]);
     else if (l.indexOf("Deposit") === 0) out.deposit = num(r[2]);
     else if (l === "Refundable bond") out.bond = num(r[2]);
+    else if (l.indexOf("Old 7-day terms") === 0) out.oldTermsTo = num(r[2]);
   }
   const bh = s.findIndex(r => r && txt(r[1]) === "What");
   if (bh >= 0) for (let i = bh + 1; i < Math.min(s.length, bh + 21); i++) out.big += num(s[i] && s[i][3]);
@@ -359,6 +360,9 @@ function normalise(raw) {
     if (n("Extra days")) b.extras.push(plural(n("Extra days"), "extra day"));
     if (n("Travel fee")) b.extras.push(money(n("Travel fee")) + " travel");
     b.owing = b.cancelled ? 0 : Math.max(0, b.total - b.received);
+    const invNo = /^INV-(\d{4})$/.exec(b.invoice);
+    b.dueDays = invNo && +invNo[1] <= setup.oldTermsTo ? 7 : pkg && pkg.dueDays != null ? pkg.dueDays : 14;
+    b.balanceDue = b.date ? addDays(b.date, -b.dueDays) : null;
     b.status = b.cancelled ? "Cancelled" : !b.date ? "Date needed" : b.date < today ? "Completed"
       : (b.received >= setup.deposit || (b.total > 0 && b.received >= b.total)) ? "Booked" : "Held";
     b.revenue = b.cancelled ? b.received : b.total;
@@ -380,7 +384,7 @@ function normalise(raw) {
       if (b.owing > 0 || needBond) add(b, {
         title: b.owing > 0 && needBond ? "Balance and bond due" : b.owing > 0 ? "Balance due" : "Bond due",
         detail: [b.owing > 0 ? money(b.owing) : "", needBond ? bondTxt + " bond" : ""].filter(Boolean).join(" + "),
-        due: addDays(b.date, -7), act: "payment", btn: "Payment received", g: 1, sum: b.owing + (needBond ? setup.bond : 0)
+        due: b.balanceDue, act: "payment", btn: "Payment received", g: 1, sum: b.owing + (needBond ? setup.bond : 0)
       });
     }
     if ((b.status === "Booked" || b.status === "Held" || b.status === "Completed") && !b.invoice)
@@ -514,7 +518,7 @@ function drawComing() {
   let h = "<h2 id=\"h-coming\">coming up</h2><p class=\"lede\">" + (D.upcoming.length ? plural(D.upcoming.length, "event") + " booked, worth " + money(D.money.ahead) + "." : "No events booked yet.") + "</p><ul class=\"rows\">";
   h += D.upcoming.map(b => {
     const p = dParts(b.date), pct = b.total > 0 ? Math.min(100, b.received / b.total * 100) : 0, dep = b.total > 0 ? Math.min(100, D.setup.deposit / b.total * 100) : 0;
-    const due = addDays(b.date, -7);
+    const due = b.balanceDue;
     const bond = !b.bondApplies ? "<span class=\"chip\">No bond needed</span>" : b.bond === "Held" ? "<span class=\"chip ok\">Bond held</span>" : b.bond ? "<span class=\"chip ok\">Bond " + esc(b.bond.toLowerCase()) + "</span>" : "<span class=\"chip\">Bond " + money(D.setup.bond) + " not paid yet</span>";
     const state = b.status === "Held" ? "<span class=\"chip tape\">Waiting on deposit</span> " : "";
     return "<li class=\"gig\"><div class=\"day\"><b>" + p.d + "</b><span>" + p.mo + ", " + p.wd + "</span></div><div>" +
@@ -555,7 +559,7 @@ function drawHandy() {
   $("#prices").innerHTML = "<h2 id=\"h-prices\">prices</h2><p class=\"lede\">Straight from the Setup tab of your Sheet.</p><div class=\"cols\"><div>" +
     "<h3>Packages</h3><table><tbody>" + S.packages.filter(p => p.price != null).map(p => "<tr><td><b style=\"font-weight:800\">" + esc(p.name) + "</b><br><span style=\"color:var(--mute);font-size:14px\">" + esc(p.for.replace(/ \(.*\)/, "")) + ", up to " + plural(p.hours, "hour") + "</span></td><td class=\"n\" style=\"font-weight:800\">" + money(p.price) + "</td></tr>").join("") + "</tbody></table></div><div>" +
     "<h3>Extras</h3><table><tbody>" + S.extras.map(e => "<tr><td>" + esc(e.name) + "</td><td class=\"n\">" + money(e.price) + (e.per && e.per !== "each" ? " " + esc(e.per) : "") + "</td></tr>").join("") + "</tbody></table>" +
-    "<p class=\"note\">" + money(S.deposit) + " deposit holds a date. Balance and " + money(S.bond) + " refundable bond are due 7 days before. Not GST registered, so no GST on anything.</p></div></div>";
+    "<p class=\"note\">" + money(S.deposit) + " deposit holds a date. Balance and " + money(S.bond) + " refundable bond are due 4 weeks before weddings and corporate events, 2 weeks before everything else (Setup tab). Not GST registered, so no GST on anything.</p></div></div>";
 }
 
 function drawClients() {
