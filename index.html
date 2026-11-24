@@ -378,7 +378,7 @@ function normalise(raw) {
   const T = [], bondTxt = money(setup.bond);
   const add = (b, o) => { o.b = b; o.overdue = !!o.due && o.due < today; T.push(o); };
   for (const b of list) {
-    if (b.status === "Held") add(b, { title: "Get the " + money(setup.deposit) + " deposit", detail: "Holds " + (b.date ? fmt(b.date) : "the date"), act: "payment", btn: "Payment received", g: 1 });
+    if (b.status === "Held") add(b, { title: "Get deposit (see invoice)", detail: "Holds " + (b.date ? fmt(b.date) : "the date"), act: "payment", btn: "Payment received", g: 1 });
     if (b.status === "Booked") {
       const needBond = b.bondApplies && !b.bond;
       if (b.owing > 0 || needBond) add(b, {
