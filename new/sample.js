@@ -52,10 +52,11 @@ function demoServer(fn, arg) {
         "Region": ["Auckland", "Hamilton", "Waikato (other)"], "How they found us": ["Instagram", "Referral", "Repeat client"], "Yes": ["Yes"],
         "Expense type": ["Equipment", "Running costs", "Marketing", "Software", "Contractor"], "Payment type": ["Hire", "Bond in", "Bond back"]
       },
-      /* name, who it is for, price, hours, takes a bond, days before the event the balance is due */
-      packs: [["Classic", "Weddings", 550, 3, "Yes", 28], ["Forever", "Weddings", 795, 6, "Yes", 28], ["Celebration hire", "Celebrations", 450, 3, "Yes", 14],
-        ["Corporate hire", "Corporate", 900, 4, "Yes", 28], ["Market hire", "Markets", 250, 4, "No", 14], ["Custom", "Anything", "", "", "Yes", 14]],
-      terms: [["Booking terms", ""], ["Deposit to hold a date", "$240"], ["Refundable bond", "$250"], ["Old 7-day terms up to invoice", ""]]
+      /* name, who it is for, price, hours, takes a bond, days before the event the balance is due, deposit */
+      packs: [["Classic", "Weddings", 550, 3, "Yes", 28, "30% of the total"], ["Forever", "Weddings", 795, 6, "Yes", 28, "30% of the total"],
+        ["Celebration hire", "Celebrations", 450, 3, "Yes", 14, "$200"], ["Corporate hire", "Corporate", 900, 4, "Yes", 28, "30% of the total"],
+        ["Market hire", "Markets", 250, 4, "No", 14, "$150"], ["Custom", "Anything", "", "", "Yes", 14, ""]],
+      terms: [["Booking terms", ""], ["Smallest deposit that marks Booked", "$150"], ["Refundable bond", "$250"], ["Old 7-day terms up to invoice no.", "5"]]
     };
   }
   const db = demoDb, of = (rows, inv, what) => rows.filter(p => p.invoice === inv && (!what || p.what === what)).reduce((s, p) => s + p.amount, 0);
@@ -83,9 +84,10 @@ function demoServer(fn, arg) {
 
   /* ---------- what the tracker's formulas would work out ---------- */
   const price = b => num(b.customPrice) || num((db.packs.find(p => p[0] === b.pkg) || [])[2]);
+  const least = Number(db.terms[1][1].replace(/[^\d.]/g, ""));          /* the smallest deposit that marks a booking Booked */
   const bookings = db.bookings.map(b => {
     const total = price(b), received = of(db.payments, b.invoice, "Hire"), cancelled = b.cancelled === "Yes";
-    const status = cancelled ? "Cancelled" : !b.date ? "Date needed" : received <= 0 ? "Waiting on deposit" : b.date < t ? "Completed" : "Booked";
+    const status = cancelled ? "Cancelled" : !b.date ? "Date needed" : received < least ? "Waiting on deposit" : b.date < t ? "Completed" : "Booked";
     const owing = cancelled ? 0 : total - received;
     return Object.assign({}, b, {
       status, total, received, owing, nextStep: status === "Waiting on deposit" ? "Get deposit" : status === "Booked" && owing > 0 ? "Balance due" : "",
@@ -95,10 +97,10 @@ function demoServer(fn, arg) {
   const who = inv => (db.bookings.find(b => b.invoice === inv) || {}).client || "";
   const income = db.payments.filter(p => p.what === "Hire").reduce((s, p) => s + p.amount, 0), spent = db.expenses.reduce((s, x) => s + x.amount, 0);
   const held = db.payments.reduce((s, p) => s + (p.what === "Bond in" ? p.amount : p.what === "Bond back" ? -p.amount : 0), 0);
-  /* the Prices tab as it reads: packages from row 5, booking terms from row 28 */
+  /* the Prices tab as it reads in tracker v3: packages with headings in row 5 (columns B to P), booking terms in rows 28 to 31 */
   const prices = Array.from({ length: 31 }, () => Array(16).fill(""));
-  ["Package", "For", "Price", "Hours", "Bond"].forEach((h, i) => { prices[4][1 + i] = h; }); prices[4][15] = "Balance due (days before)";
-  db.packs.forEach((p, i) => { p.slice(0, 5).forEach((v, c) => { prices[5 + i][1 + c] = c === 2 && v !== "" ? "$" + v : String(v); }); prices[5 + i][15] = String(p[5]); });
+  ["Package", "For", "Price", "Hours", "Bond?", "Extra hour price", "Highlight reel", "Custom board", "No power point needed", "Second event", "Host", "Extra hour", "Extra day", "Balance due (days before)", "Deposit"].forEach((h, i) => { prices[4][1 + i] = h; });
+  db.packs.forEach((p, i) => { p.slice(0, 5).forEach((v, c) => { prices[5 + i][1 + c] = c === 2 && v !== "" ? "$" + v : String(v); }); prices[5 + i][14] = String(p[5]); prices[5 + i][15] = p[6]; });
   db.terms.forEach((line, i) => { prices[27 + i][1] = line[0]; prices[27 + i][2] = line[1]; });
 
   const data = {

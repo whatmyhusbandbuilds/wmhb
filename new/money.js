@@ -153,7 +153,7 @@ async function pay(b, items, done) {
     const mine = data.bookings.find(x => x.row === b.row), today = todayIso();
     items.forEach((p, i) => data.payments.push({ row: -(Date.now() + i), date: today, invoice: b.invoice, client: b.client, amount: p.amount, what: p.what, note: "" }));
     mine.received = num(mine.received) + hire; mine.owing = Math.max(0, num(mine.owing) - hire);
-    if (hire > 0 && txt(mine.status) === "Waiting on deposit") mine.status = "Booked";
+    if (hire > 0 && txt(mine.status) === "Waiting on deposit" && mine.received >= num(S.T.smallestDeposit)) mine.status = "Booked";   /* the tracker marks it Booked once the deposit is in */
     if (items.some(p => p.what === "Bond in")) mine.bond = "Held";
     if (items.some(p => p.what === "Bond back")) mine.bond = "Returned";
     data.reports = null;                 /* the tracker's own totals are out of date until it answers */

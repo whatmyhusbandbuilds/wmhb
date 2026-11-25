@@ -54,29 +54,63 @@ const chipName = name => contactOf(name) ? withoutBrackets(name) : name.split(/\
 const firstNumber = v => { const m = /\d[\d,]*(?:\.\d+)?/.exec(String(v == null ? "" : v)); return m ? Number(m[0].replace(/,/g, "")) : null; };
 const sum = (list, key) => list.reduce((s, x) => s + num(x[key || "amount"]), 0);
 /**
- * No amount and no number of days is written in this app. They come from the Prices tab:
- * the packages table (which packages take a bond, and how long before the event the balance is due)
- * and the booking terms under it (the deposit and the bond).
+ * No amount and no number of days is written in this app. They come from the Prices tab (tracker v3):
+ *  - the packages table, headings in row 5: B Package, C For, F Bond? (Yes or No), O Balance due (days before),
+ *    P Deposit (words: "30% of the total", or an amount such as "$200");
+ *  - the booking terms under it: C29 the smallest deposit that marks a booking Booked, C30 the bond,
+ *    C31 the invoice number the old 7-day terms run up to.
+ * Columns are found by their heading and the terms by their label. The letters above are only the fallback.
  */
 function readTerms(data) {
   const g = (data && data.prices) || [], cell = (r, c) => txt(g[r] && g[r][c]);
-  const T = { deposit: null, depositPart: null, bond: null, oldTo: 0, oldDays: null, packages: {} };
+  const T = { smallestDeposit: null, bond: null, oldTo: 0, oldDays: null, packages: {} };
   const hr = g.findIndex(r => r && txt(r[1]) === "Package");
   if (hr >= 0) {
     const head = g[hr].map(txt), find = (re, spare) => { const i = head.findIndex((h, c) => c > 1 && re.test(h)); return i >= 0 ? i : spare; };
-    const bondCol = find(/bond/i, 5), dueCol = find(/due/i, 15), weeks = /week/i.test(head[dueCol] || "");
+    const forCol = find(/^for$/i, 2), bondCol = find(/bond/i, 5), dueCol = find(/due/i, 14), depositCol = find(/deposit/i, 15), weeks = /week/i.test(head[dueCol] || "");
     for (let r = hr + 1; r < g.length && cell(r, 1); r++) {
       const due = firstNumber(cell(r, dueCol));
-      T.packages[cell(r, 1)] = { bond: /^yes$/i.test(cell(r, bondCol)), dueDays: due == null ? null : due * (weeks ? 7 : 1) };
+      T.packages[cell(r, 1)] = { for: cell(r, forCol), bond: /^yes$/i.test(cell(r, bondCol)), dueDays: due == null ? null : due * (weeks ? 7 : 1), deposit: cell(r, depositCol) };
     }
   }
-  g.forEach((row, r) => {
-    const label = cell(r, 1), value = cell(r, 2);
-    if (/^deposit/i.test(label)) { if (/%/.test(value)) T.depositPart = firstNumber(value) / 100; else T.deposit = firstNumber(value); }
-    else if (/^(refundable )?bond/i.test(label)) T.bond = firstNumber(value);
-    else if (/^old .*terms/i.test(label)) { T.oldTo = firstNumber(value) || 0; T.oldDays = firstNumber(label); }
-  });
+  /* a term is in its usual row unless that row is labelled as something else; then it is looked for by its label */
+  const term = (re, usual) => {
+    if (!cell(usual, 1) || re.test(cell(usual, 1))) return usual;
+    const at = g.findIndex((row, r) => r !== hr && re.test(cell(r, 1)) && cell(r, 2) !== "");
+    return at >= 0 ? at : usual;
+  };
+  const depositRow = term(/deposit/i, 28), bondRow = term(/bond/i, 29), oldRow = term(/old .*terms/i, 30);
+  T.smallestDeposit = firstNumber(cell(depositRow, 2)); T.bond = firstNumber(cell(bondRow, 2));
+  T.oldTo = firstNumber(cell(oldRow, 2)) || 0; T.oldDays = firstNumber(cell(oldRow, 1));        /* the "7" in "Old 7-day terms" */
   return T;
+}
+/* Bookings up to this invoice number were taken on the first deposit, whatever the package's Deposit column says now. */
+const FIRST_DEPOSIT_UP_TO = 8;
+/* A deposit written as a share of the total is rounded to the nearest this many dollars. */
+const DEPOSIT_ROUNDS_TO = 50;
+/** The kind of event some words are about, so a package and a booking can be matched. '' when it can't be told. */
+function eventKind(words) {
+  const t = txt(words).toLowerCase();
+  return /wedding/.test(t) ? "Weddings" : /corporate|brand/.test(t) ? "Corporate" : /market|expo|fair|\bshow\b/.test(t) ? "Markets"
+    : /celebrat|birthday|part(y|ies)|engagement|anniversar|shower/.test(t) ? "Celebrations" : "";
+}
+/**
+ * The deposit for one booking, or null when it can't be told (then no amount is shown).
+ * It is the Deposit of the booking's package. A package with none (Custom) takes the deposit of the packages for the same kind of event.
+ */
+function depositOf(b, T, total) {
+  const invNo = /^INV-(\d+)$/.exec(txt(b.invoice));
+  if (invNo && +invNo[1] <= FIRST_DEPOSIT_UP_TO) return T.smallestDeposit;
+  const read = words => {
+    const share = /(\d+(?:\.\d+)?)\s*%/.exec(txt(words));
+    if (share) return total > 0 ? Math.round(total * share[1] / 100 / DEPOSIT_ROUNDS_TO) * DEPOSIT_ROUNDS_TO : null;
+    return firstNumber(words);
+  };
+  const own = T.packages[txt(b.pkg)], fromOwn = own ? read(own.deposit) : null;
+  if (fromOwn != null) return fromOwn;
+  const kind = eventKind(b.type);
+  const same = Object.keys(T.packages).map(name => T.packages[name]).filter(p => txt(p.deposit) && eventKind(p.for) === kind).map(p => txt(p.deposit)).filter((d, i, a) => a.indexOf(d) === i);
+  return kind && same.length === 1 ? read(same[0]) : null;
 }
 /** A date written inside a line of words, such as "Balance due Sat 5 Dec". near = a date it should be close to. */
 function dateIn(words, near) {
@@ -103,11 +137,13 @@ function moneyOf(b) {
   const dueDays = invNo && T.oldTo && T.oldDays && +invNo[1] <= T.oldTo ? T.oldDays : pkg ? pkg.dueDays : null;
   const balanceDue = date && dueDays != null ? addDays(date, -dueDays) : null;
   const written = dateIn(b.nextStep, date || today);
-  let deposit = T.depositPart != null ? Math.round(total * T.depositPart) : T.deposit;
-  if (deposit != null) deposit = Math.min(deposit, owing);
-  const next = owing <= 0 ? null : kind === "waiting" ? { what: "Deposit", amount: deposit, due: written } : { what: "Balance", amount: owing, due: written || balanceDue };
+  let deposit = depositOf(b, T, total);
+  if (deposit != null) deposit = Math.max(0, Math.min(deposit - received, owing));        /* what is left of the deposit */
+  const depositNext = kind === "waiting" && deposit !== 0;
+  /* A deposit is due 48 hours after its invoice is sent. The tracker has no invoice-sent date yet, so it shows with no date. */
+  const next = owing <= 0 ? null : depositNext ? { what: "Deposit", amount: deposit, due: written } : { what: "Balance", amount: owing, due: written || balanceDue };
   const plan = [];
-  if (owing > 0 && kind === "waiting" && deposit) { plan.push({ amount: deposit, due: written || today }); if (owing > deposit) plan.push({ amount: owing - deposit, due: balanceDue || date }); }
+  if (owing > 0 && depositNext && deposit) { plan.push({ amount: deposit, due: written || today }); if (owing > deposit) plan.push({ amount: owing - deposit, due: balanceDue || date }); }
   else if (owing > 0) plan.push({ amount: owing, due: written || balanceDue || date });
   return { kind, done: st === "Completed", date, total, received, owing, next, plan, balanceDue, bond, bondAmount: T.bond, bondHeld: bond === "held" ? (bondIn - bondBack > 0 ? bondIn - bondBack : num(T.bond)) : 0 };
 }
