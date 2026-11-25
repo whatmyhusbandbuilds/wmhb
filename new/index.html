@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en-NZ">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>wmhb</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#FAFAF7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="wmhb">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="../icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="../icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800;900&display=swap">
+<style>
+:root{
+  --ink:#1C1B15; --paper:#FAFAF7; --line:#E2DFD5; --mute:#5C5A50; --card:#FFFFFF;
+  --yellow:#F1C22D; --tint:#F1EEE2; --green:#2E7D4F; --today:#EFECE3;
+  --font:'Inter Tight',system-ui,-apple-system,'Segoe UI',sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:500 16px/1.4 var(--font);font-variant-numeric:tabular-nums}
+body.lock{overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:inherit}
+h1,h2,h3,p,ul{margin:0}
+ul{padding:0;list-style:none}
+:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+[hidden]{display:none!important}
+@media (max-width:999px){.lp{display:none!important}}
+@media (min-width:1000px){.ph{display:none!important}}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:9px 16px;border:1.5px solid var(--ink);border-radius:4px;background:var(--ink);color:var(--paper);font-weight:700;font-size:15px;line-height:1.15;text-decoration:none;white-space:nowrap}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn:disabled{opacity:.45;cursor:default}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;flex-shrink:0;padding:0;border:1.5px solid var(--ink);border-radius:4px;background:transparent}
+.iconbtn svg,.ico{width:24px;height:24px;fill:none;stroke:var(--ink);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+.logo{position:relative;display:block;width:80px;height:40px;flex-shrink:0}
+.logo b{position:absolute;left:0;top:0;font-weight:900;font-size:30px;line-height:1;letter-spacing:-3px}
+.logo svg{position:absolute;left:11px;top:33px}
+
+/* ---------- frame ---------- */
+.app{display:flex;min-height:100vh}
+.main{flex:1;min-width:0}
+.bar{display:flex;align-items:center;gap:12px;padding:calc(12px + env(safe-area-inset-top)) 16px 8px}
+.bar .btn{margin-left:auto}
+#view{padding:8px 16px 48px}
+h1{font-weight:900;font-size:44px;line-height:1;letter-spacing:-.05em;text-transform:lowercase}
+h2{font-weight:900;font-size:24px;line-height:1.05;letter-spacing:-.05em}
+.titlerow{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
+.note{margin:0 0 14px;padding:10px 12px;border:1.5px dashed var(--ink);border-radius:4px;font-size:14px;font-weight:600}
+.foot{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:32px;font-size:14px;color:var(--mute)}
+
+/* ---------- side menu ---------- */
+.menu{position:fixed;z-index:50;top:0;left:0;bottom:0;width:86%;max-width:340px;display:flex;flex-direction:column;padding:calc(12px + env(safe-area-inset-top)) 0 calc(12px + env(safe-area-inset-bottom));background:var(--paper);border-right:1.5px solid var(--ink);overflow-y:auto;visibility:hidden;transform:translateX(-100%);transition:transform 260ms ease,visibility 0s 260ms}
+.menu.open{visibility:visible;transform:none;transition:transform 260ms ease}
+.menu-head{display:flex;align-items:center;justify-content:space-between;padding:0 16px 14px}
+.menu li a{position:relative;display:flex;align-items:center;gap:12px;min-height:48px;padding:6px 16px 6px 20px;font-size:17px;font-weight:600;text-decoration:none}
+.menu li a[aria-current]{background:var(--tint);font-weight:800}
+.menu li a[aria-current]::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--ink)}
+.menu li a:hover{background:var(--tint)}
+.menu .lab{flex:1;min-width:0}
+.count{padding:1px 8px;border:1.5px solid var(--ink);border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.menu .grp{padding:18px 20px 6px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.menu .end{margin-top:auto;padding-top:10px}
+.menu .end ul{border-top:1.5px solid var(--line);padding-top:8px}
+.scrim{position:fixed;z-index:40;inset:0;background:rgba(28,27,21,.45);opacity:0;visibility:hidden;transition:opacity 260ms,visibility 0s 260ms}
+.scrim.on{opacity:1;visibility:visible;transition:opacity 260ms}
+
+/* ---------- filter ---------- */
+.fbar{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.fbar #fsum{min-width:0;font-size:14px;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ontag{padding:1px 7px;border-radius:3px;background:var(--paper);color:var(--ink);font-size:12px;font-weight:800}
+.btn.ghost .ontag{background:var(--ink);color:var(--paper)}
+.filter{position:fixed;z-index:50;left:0;right:0;bottom:0;max-height:88vh;overflow-y:auto;padding:16px 16px calc(16px + env(safe-area-inset-bottom));background:var(--paper);border-top:1.5px solid var(--ink);border-radius:10px 10px 0 0;visibility:hidden;transform:translateY(100%);transition:transform 260ms ease,visibility 0s 260ms}
+.filter.open{visibility:visible;transform:none;transition:transform 260ms ease}
+.f-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.linkbtn{min-height:44px;padding:0 4px;border:0;background:none;font-weight:700;font-size:15px;text-decoration:underline;text-underline-offset:3px}
+.acc{border-top:1.5px solid var(--line)}
+.acc>button{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:8px 0;border:0;background:none;text-align:left}
+.acc>button b{display:block;font-size:16px;font-weight:800}
+.acc>button small{display:block;font-size:13px;color:var(--mute);font-weight:500}
+.acc>button span{flex:1;min-width:0}
+.acc>button .ico{width:20px;height:20px;transition:transform .15s}
+.acc>button[aria-expanded=true] .ico{transform:rotate(180deg)}
+.tick{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:4px 0;border:0;background:none;text-align:left;font-size:15px;font-weight:600}
+.tick .box{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex-shrink:0;border:1.5px solid var(--ink);border-radius:4px;background:var(--card)}
+.tick .box svg{width:14px;height:14px;fill:none;stroke:var(--paper);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;opacity:0}
+.tick[aria-pressed=true] .box{background:var(--ink)}
+.tick[aria-pressed=true] .box svg{opacity:1}
+.tick .lab{flex:1}
+.tick .n{color:var(--mute);font-size:14px}
+.acc-body{padding-bottom:8px}
+#fshow{width:100%;margin-top:14px;white-space:normal}
+
+/* ---------- looks: booked, waiting, enquiry ---------- */
+.sw{display:inline-block;width:18px;height:18px;flex-shrink:0;border-radius:3px;vertical-align:-3px}
+.booked{background:var(--green);color:#fff}
+.waiting{background:var(--yellow);color:var(--ink);box-shadow:inset 0 0 0 2px var(--ink)}
+.enquiry{background:var(--card);color:var(--ink);border:2px dashed var(--ink)}
+.done{background:transparent;color:var(--mute);box-shadow:inset 0 0 0 1.5px var(--line)}
+.bang{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex-shrink:0;border-radius:50%;background:#000;color:#fff;font-size:12px;font-weight:900;line-height:1}
+
+/* ---------- calendar ---------- */
+.clash{display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:10px 12px;background:var(--card);border:1.5px solid var(--ink);border-radius:4px;font-size:15px}
+.clash p{flex:1;min-width:0}
+.clash b{font-weight:800}
+.mbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.mbar h2{text-transform:none;letter-spacing:-.03em;font-size:22px;text-align:center}
+.dow{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));margin-bottom:4px;font-size:12px;font-weight:700;color:var(--mute);text-align:center}
+.grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.cell{position:relative;display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch;min-height:62px;width:100%;padding:4px 2px 3px;border:0;border-radius:0;background:var(--card);text-align:left}
+.cell.out{background:var(--paper)}
+.cell.out .dn{opacity:.35}
+.cell.today{background:var(--today)}
+.cell .dn{display:block;padding:0 3px 3px;font-size:13px;font-weight:700;line-height:1.2}
+.cell.today .dn{font-weight:900}
+.pill{display:flex;gap:2px;padding:2px 4px;border-radius:3px;font-size:11px;font-weight:700;line-height:1.3;min-width:0}
+.pill.enquiry,.pill.waiting{padding:1px 3px}
+.pill.waiting{border:2px solid var(--ink);box-shadow:none}
+.pill .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill .more{flex-shrink:0}
+.cell .bang{position:absolute;top:3px;right:3px;width:15px;height:15px;font-size:10px}
+.key{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px;font-size:13px;font-weight:600}
+.key span{display:inline-flex;align-items:center;gap:6px}
+.key .sw{width:16px;height:16px}
+
+/* ---------- list ---------- */
+.list h2{margin:28px 0 4px}
+.list .sub{font-size:14px;color:var(--mute);margin-bottom:6px}
+.rows{border-top:1.5px solid var(--line)}
+.row{display:grid;grid-template-columns:54px minmax(0,1fr) auto;align-items:center;gap:4px 12px;width:100%;min-height:60px;padding:10px 0;border:0;border-bottom:1.5px solid var(--line);background:none;text-align:left}
+.row .when small{display:block;font-size:12px;color:var(--mute);font-weight:600}
+.row .when b{display:block;font-size:15px;font-weight:800;line-height:1.2}
+.row .who b{font-size:16px;font-weight:800}
+.row .who .sub2{display:block;font-size:14px;color:var(--mute);overflow-wrap:anywhere}
+.tag{margin-left:6px;padding:0 6px;border:1.5px solid var(--ink);border-radius:3px;font-size:11px;font-weight:800;vertical-align:2px}
+.badge{display:inline-block;padding:3px 8px;border-radius:3px;font-size:13px;font-weight:700;line-height:1.3;text-align:center}
+.badge.waiting{border:2px solid var(--ink);box-shadow:none;padding:1px 6px}
+.badge.enquiry{padding:1px 6px}
+.empty{padding:16px 0;color:var(--mute)}
+.list{container-type:inline-size}
+@container (max-width:520px){
+  .row{grid-template-columns:54px minmax(0,1fr)}
+  .row .badge{grid-column:2;justify-self:start;margin-top:2px}
+}
+
+/* ---------- coming next ---------- */
+.next{max-width:560px;margin-top:8px;padding:18px;border:1.5px dashed var(--ink);border-radius:4px}
+.next p{font-weight:700;margin-bottom:8px}
+.next ul{list-style:disc;padding-left:20px}
+.next li{margin:4px 0}
+
+/* ---------- sheets and dialogs ---------- */
+dialog{width:100%;max-width:100%;max-height:92vh;margin:auto 0 0;padding:0;border:0;border-top:1.5px solid var(--ink);border-radius:10px 10px 0 0;background:var(--paper);color:var(--ink);overflow:auto}
+dialog::backdrop{background:rgba(28,27,21,.45)}
+dialog[open]{animation:up 260ms ease}
+@keyframes up{from{transform:translateY(40px);opacity:0}}
+.d-in{padding:16px 16px calc(18px + env(safe-area-inset-bottom))}
+.d-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.d-head h2{font-size:28px;text-transform:none;letter-spacing:-.04em}
+.d-head p{margin-top:3px;font-size:15px;color:var(--mute);overflow-wrap:anywhere}
+.warn{display:flex;gap:10px;margin-bottom:12px;padding:10px 12px;background:var(--tint);border:1.5px solid var(--ink);border-radius:4px;font-size:15px;font-weight:600}
+.opt{display:flex;align-items:center;gap:12px;width:100%;min-height:60px;margin-top:8px;padding:9px 12px;border:1.5px solid var(--line);border-radius:4px;background:var(--card);text-align:left}
+.opt[aria-pressed=true]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.opt b{display:block;font-size:16px;font-weight:800}
+.opt small{display:block;font-size:14px;color:var(--mute)}
+.opt .sw{width:22px;height:22px}
+.opt .cur{margin-left:auto;font-size:12px;font-weight:800}
+.sw.gone{background:var(--line)}
+.err{margin-top:10px;font-size:15px;font-weight:700}
+.err:empty{display:none}
+.datestep label,.fld label{display:block;margin-bottom:4px;font-size:14px;font-weight:700}
+.datestep input,.fld input:not([type=checkbox]),.fld select,.fld textarea{width:100%;min-height:44px;padding:8px 10px;border:1.5px solid var(--ink);border-radius:4px;background:#fff;font:600 17px var(--font);color:var(--ink)}
+.datestep .go{display:grid;gap:8px;margin-top:12px}
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}
+.fld{min-width:0}.fld.wide{grid-column:1/-1}
+.fld textarea{min-height:96px;font-size:15px;font-weight:500}
+.fld small{display:block;margin-top:4px;color:var(--mute);font-size:13px}
+.fld.tickf{display:flex;align-items:center;gap:10px;min-height:44px}
+.fld.tickf input{width:24px;height:24px;margin:0;accent-color:var(--ink)}
+.fld.tickf label{margin:0;font-size:15px}
+#save{width:100%;margin-top:16px}
+dl.facts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 16px;margin:0;font-size:15px}
+dl.facts dt{color:var(--mute)}dl.facts dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+.toast{position:fixed;left:50%;bottom:20px;z-index:60;max-width:calc(100% - 32px);padding:12px 18px;border-radius:4px;background:var(--ink);color:var(--paper);font-weight:700;opacity:0;transform:translate(-50%,16px);pointer-events:none;transition:opacity .2s,transform .2s}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+@media (max-width:480px){.fields{grid-template-columns:minmax(0,1fr)}}
+
+/* ---------- laptop ---------- */
+@media (min-width:1000px){
+  .menu{position:sticky;top:0;height:100vh;width:248px;max-width:none;flex-shrink:0;visibility:visible;transform:none;transition:none;padding-top:24px}
+  .menu-head{padding-bottom:22px}
+  .scrim{display:none}
+  #view{padding:28px 32px 56px}
+  h1{font-size:56px}
+  .titlerow{margin-bottom:22px}
+  .cols{display:grid;grid-template-columns:250px minmax(0,1fr);gap:24px 32px;align-items:start}
+  .cal{max-width:720px}
+  .list{grid-column:2;max-width:720px}
+  .list h2:first-child{margin-top:8px}
+  .filter{position:static;z-index:auto;max-height:none;overflow:visible;padding:14px 16px 8px;background:var(--card);border:1.5px solid var(--line);border-radius:4px;visibility:visible;transform:none;transition:none}
+  .cell{min-height:84px;padding:6px 4px 4px}
+  .pill{font-size:12px;padding:3px 6px}
+  .pill.enquiry,.pill.waiting{padding:1px 4px}
+  dialog{width:min(520px,calc(100% - 32px));margin:auto;border:1.5px solid var(--ink);border-radius:6px}
+  dialog.wide{width:min(640px,calc(100% - 32px))}
+  .d-in{padding:20px 22px 22px}
+}
+@media (min-width:1380px){
+  .cols{grid-template-columns:250px minmax(420px,1.25fr) minmax(320px,1fr)}
+  .list{grid-column:3}
+  .list h2:first-child{margin-top:0}
+}
+@media (prefers-reduced-motion:reduce){
+  .menu,.menu.open,.filter,.filter.open,.scrim,.scrim.on,.toast,.acc>button .ico{transition:none}
+  dialog[open]{animation:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="menu" id="menu" aria-label="Main menu">
+    <div class="menu-head">
+      <span class="logo" aria-label="wmhb"><b>wmhb</b><svg aria-hidden="true" width="58" height="7" viewBox="0 0 500 57" fill="#1C1B15"><path class="ruler"></path></svg></span>
+      <button class="iconbtn ph" type="button" data-menu-close aria-label="Close menu"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div id="menuList"></div>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+
+  <div class="main">
+    <header class="bar ph">
+      <button class="iconbtn" type="button" id="menuBtn" data-menu-open aria-label="Open menu" aria-expanded="false" aria-controls="menu"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <span class="logo" aria-label="wmhb"><b>wmhb</b><svg aria-hidden="true" width="58" height="7" viewBox="0 0 500 57" fill="#1C1B15"><path class="ruler"></path></svg></span>
+      <button class="btn" type="button" data-new>Add a booking</button>
+    </header>
+
+    <main id="view">
+      <p class="note" id="note" role="status" hidden></p>
+
+      <section id="v-clients" aria-labelledby="h-clients">
+        <div class="titlerow"><h1 id="h-clients">clients</h1><button class="btn lp" type="button" data-new>Add a booking</button></div>
+        <div class="fbar ph"><button class="btn ghost" type="button" id="fopen" data-fopen aria-expanded="false" aria-controls="filter">Filters <span class="ontag" id="fon" hidden>On</span></button><span id="fsum"></span></div>
+        <div class="cols">
+          <div class="filter" id="filter" aria-label="Filter"></div>
+          <div class="cal">
+            <div id="clashes"></div>
+            <div class="mbar">
+              <button class="iconbtn" type="button" data-month="-1" aria-label="Previous month"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg></button>
+              <h2 id="mlabel" aria-live="polite"></h2>
+              <button class="iconbtn" type="button" data-month="1" aria-label="Next month"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></button>
+            </div>
+            <div class="dow" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+            <div class="grid" id="grid"></div>
+            <div class="key" aria-label="Key">
+              <span><i class="sw booked"></i>Booked</span><span><i class="sw waiting"></i>Waiting on deposit</span><span><i class="sw enquiry"></i>Enquiry</span><span><i class="sw done"></i>Completed</span><span><i class="bang" aria-hidden="true">!</i>Clash</span>
+            </div>
+          </div>
+          <div class="list" id="list"></div>
+        </div>
+      </section>
+
+      <section id="v-next" hidden></section>
+
+      <div class="foot"><span id="fresh" role="status"></span><button class="linkbtn" type="button" id="refresh" data-refresh>Refresh</button></div>
+    </main>
+  </div>
+</div>
+
+<dialog id="dlg" aria-labelledby="dlg-title"></dialog>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+"use strict";
+/* The /exec address of the new back end ("wmhb app 2") goes here once it is deployed.
+   While it is empty the page shows made-up sample data and saves nothing. */
+const API = "";
+const DEMO = !API || /[?&]demo\b/.test(location.search);
+/* The key comes from the page address (#k=...) and is kept on this device only. It is never written in this file. */
+let KEY = (/[#&]k=([^&]+)/.exec(location.hash) || [])[1] || "";
+try { if (KEY) localStorage.setItem("wmhb2.k", KEY); else KEY = localStorage.getItem("wmhb2.k") || ""; } catch (e) {}
+
+const DAY = 864e5;
+const WD = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"], MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const $ = (s, r) => (r || document).querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const money = n => (n < 0 ? "-$" : "$") + Math.abs(Math.round(n)).toLocaleString("en-NZ");
+const txt = v => v == null ? "" : String(v).trim();
+const num = v => { const n = Number(v); return isFinite(n) ? n : 0; };
+const ms = iso => Date.parse(iso + "T00:00:00Z");
+const addDays = (iso, n) => new Date(ms(iso) + n * DAY).toISOString().slice(0, 10);
+const dParts = iso => { const d = new Date(ms(iso)); return { wd: WD[d.getUTCDay()], d: d.getUTCDate(), mo: MO[d.getUTCMonth()], m: d.getUTCMonth(), y: d.getUTCFullYear() }; };
+const fmt = iso => { const p = dParts(iso); return p.wd + " " + p.d + " " + p.mo; };
+const isoOf = (y, m, d) => y + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+function todayIso() {
+  const p = {}; new Intl.DateTimeFormat("en-GB", { timeZone: "Pacific/Auckland", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()).forEach(x => p[x.type] = x.value);
+  return p.year + "-" + p.month + "-" + p.day;
+}
+const clock = t => new Intl.DateTimeFormat("en-NZ", { timeZone: "Pacific/Auckland", hour: "numeric", minute: "2-digit" }).format(new Date(t)).replace(/\s/g, " ").toLowerCase();
+const listAnd = a => a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1];
+
+/* Enquiry dates are typed by clients: "5 December 2026", "January 2027", or nothing. */
+function parseLoose(t) {
+  t = txt(t).replace(/^[A-Za-z]{3,9},?\s+(?=\d)/, "");
+  let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t), y, mo, d;
+  if (m) { y = +m[1]; mo = +m[2] - 1; d = +m[3]; }
+  else if ((m = /^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3})[A-Za-z]*\.?,?\s+(\d{4})$/.exec(t))) { d = +m[1]; mo = MO.findIndex(x => x.toLowerCase() === m[2].toLowerCase()); y = +m[3]; }
+  else if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t))) { d = +m[1]; mo = +m[2] - 1; y = +m[3]; }
+  else return null;
+  if (mo < 0 || mo > 11 || d < 1) return null;
+  const iso = isoOf(y, mo, d), back = new Date(ms(iso));
+  return back.getUTCDate() === d && back.getUTCMonth() === mo ? iso : null;
+}
+function groupOf(type) {
+  const t = txt(type).toLowerCase();
+  if (/wedding/.test(t)) return "Weddings";
+  if (/corporate|brand/.test(t)) return "Corporate";
+  if (/market|expo|fair|\bshow\b/.test(t)) return "Markets";
+  return "Celebrations";
+}
+
+/* ---------- menu ---------- */
+const ICON = {
+  clients: '<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  money: '<circle cx="12" cy="12" r="8.5"/><path d="M14.8 9.4c-.5-1-1.5-1.5-2.8-1.5-1.7 0-2.9.8-2.9 2.1 0 2.9 5.9 1.2 5.9 4.2 0 1.3-1.3 2.1-3 2.1-1.4 0-2.5-.6-3-1.6M12 6.2v1.7M12 16.3V18"/>',
+  eventday: '<path d="M12 21s-6.5-5.6-6.5-10.5a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.3"/>',
+  videos: '<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M10.2 9.2v5.6l4.8-2.8z"/>',
+  designs: '<path d="M4 20l1-4.5L16.5 4a2.1 2.1 0 0 1 3 3L8 18.5zM14.5 6l3 3"/>',
+  prices: '<path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1 1 0 0 1 0 1.4l-7.3 7.3a1 1 0 0 1-1.4 0z"/><circle cx="8" cy="8" r="1.4"/>',
+  partners: '<circle cx="9" cy="8.5" r="3"/><path d="M3.5 19c.4-3 2.6-5 5.5-5s5.1 2 5.5 5M15.5 5.8a3 3 0 0 1 0 5.4M17 14.3c2 .6 3.2 2.3 3.5 4.7"/>',
+  settings: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>'
+};
+const TABS = [
+  { id: "clients", label: "Clients" },
+  { id: "money", label: "Money", next: ["Who owes what (deposits and balances)", "Invoices, numbered INV-0000", "Costs for each booking, and profit each month"] },
+  { id: "eventday", label: "Event day", next: ["The next event’s address, time and setup", "The packing list for the board", "A power point within 10 m, or bring the power station"] },
+  { id: "videos", label: "Videos", next: ["Events with guest videos still to send", "Mark them sent once the client has them"] },
+  { id: "designs", label: "Designs", next: ["Each client’s board and screen designs", "What’s approved and what’s still with Sara"] },
+  { id: "prices", label: "Prices and packages", group: "Business", next: ["The packages and extras", "Deposit and balance rules"] },
+  { id: "partners", label: "Partners", next: ["Decor businesses that send clients", "Who referred who, and the 10% fee owed"] },
+  { id: "settings", label: "Settings", end: true, next: ["Aadil’s and Sara’s logins", "Email signature and templates"] }
+];
+function drawMenu() {
+  const row = t => {
+    const n = t.id === "clients" ? S.toAnswer : t.id === "money" ? S.toChase : 0;
+    const badge = n ? "<span class=\"count\">" + n + (t.id === "clients" ? " to answer" : " to chase") + "</span>" : "";
+    return "<li><a href=\"#\" data-tab=\"" + t.id + "\"" + (S.tab === t.id ? " aria-current=\"page\"" : "") + "><svg class=\"ico\" aria-hidden=\"true\" viewBox=\"0 0 24 24\">" + ICON[t.id] + "</svg><span class=\"lab\">" + t.label + "</span>" + badge + "</a></li>";
+  };
+  let h = "<ul>";
+  for (const t of TABS.filter(t => !t.end)) { if (t.group) h += "</ul><p class=\"grp\">" + t.group + "</p><ul>"; h += row(t); }
+  $("#menuList").innerHTML = h + "</ul>";
+  let end = $("#menuEnd");
+  if (!end) { end = document.createElement("div"); end.id = "menuEnd"; end.className = "end"; $("#menu").appendChild(end); }
+  end.innerHTML = "<ul>" + TABS.filter(t => t.end).map(row).join("") + "</ul>";
+}
+const phone = () => !matchMedia("(min-width:1000px)").matches;
+function menu(open) {
+  $("#menu").classList.toggle("open", open); $("#scrim").classList.toggle("on", open || $("#filter").classList.contains("open"));
+  $("#menuBtn").setAttribute("aria-expanded", open); document.body.classList.toggle("lock", open);
+  if (open) $("[data-menu-close]").focus(); else if (phone()) $("#menuBtn").focus();
+}
+function sheet(open) {
+  $("#filter").classList.toggle("open", open); $("#scrim").classList.toggle("on", open);
+  $("#fopen").setAttribute("aria-expanded", open); document.body.classList.toggle("lock", open);
+  if (open) $("#filter [data-freset]").focus(); else if (phone()) $("#fopen").focus();
+}
+function go(tab) {
+  S.tab = tab; const t = TABS.find(x => x.id === tab);
+  $("#v-clients").hidden = tab !== "clients"; $("#v-next").hidden = tab === "clients";
+  if (t.next) $("#v-next").innerHTML = "<div class=\"titlerow\"><h1>" + esc(t.label) + "</h1></div><div class=\"next\"><p>We design this screen next. It will have:</p><ul>" + t.next.map(x => "<li>" + esc(x) + "</li>").join("") + "</ul></div>";
+  drawMenu(); scrollTo(0, 0);
+}
+
+/* ---------- the data ---------- */
+const STATUS_KEYS = [["booked", "Booked"], ["waiting", "Waiting on deposit"], ["enquiry", "Enquiry"]];
+const TYPE_KEYS = ["Celebrations", "Weddings", "Corporate", "Markets"];
+const S = { tab: "clients", ym: null, f: {}, acc: "status", items: [], clash: new Map(), toAnswer: 0, toChase: 0, data: null, readAt: 0 };
+STATUS_KEYS.forEach(k => S.f[k[0]] = true); TYPE_KEYS.forEach(k => S.f[k] = true);
+
+function build(data) {
+  const items = []; let toChase = 0, toAnswer = 0;
+  for (const b of data.bookings || []) {
+    const name = txt(b.client), st = txt(b.status); if (!name) continue;
+    if (st === "Cancelled" || txt(b.cancelled) === "Yes") continue;
+    const owing = Math.max(0, num(b.owing)), received = num(b.received);
+    /* Booked = deposit in. Waiting on deposit = invoice sent, deposit not in. Both come from the tracker's Status column. */
+    const kind = st === "Booked" ? "booked" : st === "Waiting on deposit" ? "waiting" : st === "Completed" ? "done" : received > 0 ? "booked" : "waiting";
+    if (kind === "waiting" || owing > 0) toChase++;
+    items.push({ id: "b" + b.row, booking: true, kind, name, short: name.split(/\s+/)[0], date: /^\d{4}-\d{2}-\d{2}$/.test(txt(b.date)) ? b.date : null, dateText: "",
+      type: txt(b.type), group: groupOf(b.type), venue: [txt(b.venue), txt(b.suburb)].filter(Boolean).join(", "),
+      contact: [b.phone ? "Phone " + txt(b.phone) : "", txt(b.email), b.insta ? "Instagram " + txt(b.insta) : ""].filter(Boolean).join(", "), owing, ref: b });
+  }
+  for (const q of data.enquiries || []) {
+    const name = txt(q.name), st = txt(q.status) || "New"; if (!name || txt(q.what)) continue;        /* anything in "What happened" is closed */
+    if (st !== "New" && st !== "Waiting on response") continue;
+    if (st === "New") toAnswer++;
+    const venue = (/venue:\s*([^\n]+)/i.exec(txt(q.message)) || [])[1] || "";
+    items.push({ id: "q" + q.row, booking: false, kind: "enquiry", status: st, name, short: name.split(/\s+/)[0], date: parseLoose(q.date), dateText: txt(q.date),
+      type: txt(q.type), group: groupOf(q.type), venue: venue.trim(), contact: txt(q.contact), owing: 0, ref: q });
+  }
+  const rank = { booked: 0, done: 0, waiting: 1, enquiry: 2 };
+  items.sort((a, b) => (a.date || "9") < (b.date || "9") ? -1 : (a.date || "9") > (b.date || "9") ? 1 : rank[a.kind] - rank[b.kind]);
+  /* Clash rule: more than one live item on a date. There is only one board. */
+  const by = new Map();
+  items.forEach(i => { if (i.date && i.kind !== "done") by.set(i.date, (by.get(i.date) || []).concat(i)); });
+  S.clash = new Map([...by].filter(e => e[1].length > 1));
+  S.items = items; S.toAnswer = toAnswer; S.toChase = toChase;
+}
+const fkey = i => i.kind === "done" ? "booked" : i.kind;
+const match = i => S.f[fkey(i)] && S.f[i.group];
+const inMonth = i => i.date && i.date.slice(0, 7) === isoOf(S.ym[0], S.ym[1], 1).slice(0, 7);
+const scope = () => S.items.filter(i => inMonth(i) || !i.date);
+function badge(i) {
+  const t = i.kind === "booked" ? (i.owing > 0 ? "Booked (" + money(i.owing) + " to pay)" : "Booked (paid)") : i.kind === "waiting" ? "Waiting on deposit"
+    : i.kind === "done" ? (i.owing > 0 ? "Completed (" + money(i.owing) + " to pay)" : "Completed") : i.status === "New" ? "Enquiry: new" : "Enquiry: waiting on response";
+  return "<span class=\"badge " + i.kind + "\">" + esc(t) + "</span>";
+}
+const said = i => i.name + (i.kind === "booked" ? " is booked" : i.kind === "waiting" ? " is waiting on deposit" : " has enquired");
+
+/* ---------- drawing the clients screen ---------- */
+function keepFocus(fn) {
+  const a = document.activeElement, id = a && a.dataset && a.dataset.fid; fn();
+  if (id) { const el = document.querySelector("[data-fid=\"" + id + "\"]"); if (el) el.focus(); }
+}
+const TICK = "<span class=\"box\" aria-hidden=\"true\"><svg viewBox=\"0 0 16 16\"><path d=\"M3 8.5l3.2 3.2L13 4.8\"/></svg></span>";
+function drawFilter() {
+  const sc = scope(), n = sc.filter(match).length;
+  const offS = STATUS_KEYS.filter(k => !S.f[k[0]]), offT = TYPE_KEYS.filter(k => !S.f[k]);
+  const group = (id, title, off, rows) => "<div class=\"acc\"><button type=\"button\" data-acc=\"" + id + "\" data-fid=\"acc-" + id + "\" aria-expanded=\"" + (S.acc === id) + "\" aria-controls=\"accb-" + id + "\"><span><b>" + title + "</b><small>" + (off.length ? "Hiding " + esc(off.join(", ")) : "All showing") + "</small></span><svg class=\"ico\" aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M6 9.5l6 6 6-6\"/></svg></button>" +
+    "<div class=\"acc-body\" id=\"accb-" + id + "\"" + (S.acc === id ? "" : " hidden") + ">" + rows + "</div></div>";
+  const tick = (k, label, sw) => "<button class=\"tick\" type=\"button\" data-tick=\"" + k + "\" data-fid=\"t-" + k + "\" aria-pressed=\"" + S.f[k] + "\">" + TICK + sw + "<span class=\"lab\">" + label + "</span><span class=\"n\">" + sc.filter(i => fkey(i) === k || i.group === k).length + "</span></button>";
+  $("#filter").innerHTML = "<div class=\"f-head\"><h2>filter</h2><button class=\"linkbtn\" type=\"button\" data-freset data-fid=\"reset\">Reset</button></div>" +
+    group("status", "Bookings", offS.map(k => k[1]), STATUS_KEYS.map(k => tick(k[0], k[1], "<i class=\"sw " + k[0] + "\"></i>")).join("")) +
+    group("type", "Event type", offT, TYPE_KEYS.map(k => tick(k, k, "")).join("")) +
+    "<button class=\"btn ph\" type=\"button\" id=\"fshow\" data-fclose data-fid=\"show\">Show " + n + " booking" + (n === 1 ? "" : "s") + " and enquiries</button>";
+  const on = offS.length + offT.length > 0, parts = [];
+  if (offS.length) parts.push("Bookings: " + (STATUS_KEYS.filter(k => S.f[k[0]]).map(k => k[1]).join(", ") || "none"));
+  if (offT.length) parts.push("Event type: " + (TYPE_KEYS.filter(k => S.f[k]).join(", ") || "none"));
+  $("#fon").hidden = !on; $("#fsum").textContent = on ? parts.join("; ") : "Showing everything";
+}
+function drawCal() {
+  const [y, m] = S.ym, today = todayIso(), first = new Date(Date.UTC(y, m, 1)), lead = (first.getUTCDay() + 6) % 7;
+  const days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(), cells = Math.ceil((lead + days) / 7) * 7, start = addDays(isoOf(y, m, 1), -lead);
+  $("#mlabel").textContent = MONTHS[m] + " " + y;
+  let h = "";
+  for (let c = 0; c < cells; c++) {
+    const iso = addDays(start, c), p = dParts(iso), out = p.m !== m;
+    const its = out ? [] : S.items.filter(i => i.date === iso && match(i)), clash = !out && S.clash.has(iso);
+    const cls = "cell" + (out ? " out" : "") + (iso === today ? " today" : "");
+    const inner = "<span class=\"dn\">" + p.d + "</span>" + (its.length ? "<span class=\"pill " + its[0].kind + "\"><span class=\"nm\">" + esc(its[0].short) + "</span>" + (its.length > 1 ? "<span class=\"more\">+" + (its.length - 1) + "</span>" : "") + "</span>" : "") + (clash ? "<span class=\"bang\" aria-hidden=\"true\">!</span>" : "");
+    if (its.length) {
+      const open = its.find(i => !i.booking) || its[0];
+      const label = fmt(iso) + ": " + its.map(i => i.name + ", " + (i.kind === "enquiry" ? "enquiry" : i.kind === "waiting" ? "waiting on deposit" : i.kind === "done" ? "completed" : "booked")).join("; ") + (clash ? ". Clash" : "") + (iso === today ? ". Today" : "");
+      h += "<button type=\"button\" class=\"" + cls + "\" data-item=\"" + open.id + "\" data-fid=\"c-" + iso + "\" aria-label=\"" + esc(label) + "\">" + inner + "</button>";
+    } else h += "<div class=\"" + cls + "\">" + inner + "</div>";
+  }
+  $("#grid").innerHTML = h;
+  $("#clashes").innerHTML = [...S.clash].filter(e => e[0].slice(0, 7) === isoOf(y, m, 1).slice(0, 7)).sort().map(([iso, its]) => {
+    const q = its.find(i => !i.booking);
+    return "<div class=\"clash\"><span class=\"bang\" aria-hidden=\"true\">!</span><p><b>Clash on " + fmt(iso) + ".</b> " + esc(listAnd(its.map(said))) + ", on the same day.</p>" + (q ? "<button class=\"btn ghost\" type=\"button\" data-item=\"" + q.id + "\" data-fid=\"x-" + iso + "\">Open</button>" : "") + "</div>";
+  }).join("");
+}
+function rowHtml(i) {
+  const p = i.date ? dParts(i.date) : null;
+  const when = p ? "<small>" + p.wd + "</small><b>" + p.d + " " + p.mo + "</b>" : "<small>" + (i.dateText ? "Around" : "No date") + "</small><b>" + esc(i.dateText ? i.dateText.replace(/^([A-Za-z]{3})[a-z]*\s+(\d{4})$/, "$1 $2") : "yet") + "</b>";
+  return "<li><button type=\"button\" class=\"row\" data-item=\"" + i.id + "\" data-fid=\"r-" + i.id + "\"><span class=\"when\">" + when + "</span>" +
+    "<span class=\"who\"><b>" + esc(i.name) + "</b>" + (i.date && i.kind !== "done" && S.clash.has(i.date) ? "<span class=\"tag\">Clash</span>" : "") + "<span class=\"sub2\">" + esc([i.type, i.venue].filter(Boolean).join(", ") || "No details yet") + "</span></span>" + badge(i) + "</button></li>";
+}
+function drawList() {
+  const mName = MONTHS[S.ym[1]], shown = S.items.filter(match), month = shown.filter(inMonth);
+  const enq = shown.filter(i => !i.date && !i.booking), bk = shown.filter(i => !i.date && i.booking);
+  let h = "<h2><span class=\"ph\">In " + mName + "</span><span class=\"lp\">Everything that matches</span></h2><p class=\"sub lp\">" + mName + " " + S.ym[0] + "</p>" +
+    (month.length ? "<ul class=\"rows\">" + month.map(rowHtml).join("") + "</ul>" : "<p class=\"empty\">Nothing in " + mName + (S.items.some(inMonth) ? " with these filters." : ".") + "</p>");
+  if (enq.length) h += "<h2>Enquiries with no date yet</h2><ul class=\"rows\">" + enq.map(rowHtml).join("") + "</ul>";
+  if (bk.length) h += "<h2>Bookings with no date yet</h2><ul class=\"rows\">" + bk.map(rowHtml).join("") + "</ul>";
+  $("#list").innerHTML = h;
+}
+function draw() { keepFocus(() => { drawMenu(); drawFilter(); drawCal(); drawList(); }); }
+
+/* ---------- talking to the tracker ---------- */
+const dlg = $("#dlg");
+let busy = false, form = null;
+async function server(fn, arg) {
+  if (DEMO) return demoServer(fn, arg);
+  const res = await fetch(API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ k: KEY, fn, arg }), credentials: "omit", redirect: "follow" });
+  if (!res.ok) throw new Error("the tracker answered with error " + res.status);
+  const j = await res.json();
+  if (!j.ok) throw new Error(j.error);
+  return typeof j.result === "string" ? JSON.parse(j.result) : j.result;
+}
+const why = x => ((x && x.message) || "The tracker didn’t answer.").replace(/^Error:\s*/, "");
+function apply(data) {
+  S.data = data; S.readAt = data.readAt || Date.now(); build(data); draw();
+  $("#fresh").textContent = DEMO ? "Sample data, made up for testing the screens. Nothing is saved." : "Read from the tracker at " + clock(S.readAt) + ".";
+}
+async function load() {
+  if (!DEMO && !KEY) { note("This device doesn’t have the key yet. Open the full private link you were sent, then add that page to your home screen."); return; }
+  if (busy) return; busy = true; $("#refresh").disabled = true;
+  try { apply((await server("getData")).data); note(DEMO ? "Sample data. The names are made up and nothing you tap is saved." : ""); }
+  catch (x) { note("Couldn’t read the tracker (" + why(x) + "). Press Refresh to try again."); }
+  finally { busy = false; $("#refresh").disabled = false; }
+}
+function note(msg) { const el = $("#note"); el.textContent = msg; el.hidden = !msg; }
+let toastTimer;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("on"), 5000); }
+
+/* ---------- enquiry status picker ---------- */
+const OPTS = [
+  ["New", "enquiry", "Nobody has replied yet"],
+  ["Waiting on response", "enquiry", "We replied, waiting to hear back"],
+  ["Waiting on deposit", "waiting", "They want to book. It becomes a booking and turns yellow."],
+  ["Cancelled", "gone", "Hides it from the calendar. It stays in the tracker, greyed out."]
+];
+const CLOSE = "<button class=\"iconbtn\" type=\"button\" data-close aria-label=\"Close\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M6 6l12 12M18 6L6 18\"/></svg></button>";
+function headHtml(i) {
+  const when = i.date ? fmt(i.date) + (dParts(i.date).y !== +todayIso().slice(0, 4) ? " " + dParts(i.date).y : "") : i.dateText || "no date yet";
+  return "<div class=\"d-head\"><div><h2 id=\"dlg-title\">" + esc(i.name) + "</h2><p>" + esc([i.type, i.venue, when].filter(Boolean).join(", ")) + "</p>" + (i.contact ? "<p>" + esc(i.contact) + "</p>" : "") + "</div>" + CLOSE + "</div>";
+}
+function clashHtml(i) {
+  const others = i.date && S.clash.has(i.date) ? S.clash.get(i.date).filter(o => o !== i) : [];
+  return others.length ? "<div class=\"warn\"><span class=\"bang\" aria-hidden=\"true\">!</span><p>Clash: " + esc(listAnd(others.map(said))) + " on " + fmt(i.date) + ". With one board we can’t take " + (others.length > 1 ? "them all" : "both") + ".</p></div>" : "";
+}
+function show(html, wide) { form = null; dlg.className = wide ? "wide" : ""; dlg.innerHTML = "<div class=\"d-in\">" + html + "</div>"; if (!dlg.open) dlg.showModal(); }
+function openPicker(i) {
+  show(headHtml(i) + clashHtml(i) + "<div role=\"group\" aria-label=\"Where this enquiry is at\">" + OPTS.map(o =>
+    "<button class=\"opt\" type=\"button\" data-opt=\"" + o[0] + "\" data-id=\"" + i.id + "\" aria-pressed=\"" + (i.status === o[0]) + "\"><i class=\"sw " + o[1] + "\"></i><span><b>" + o[0] + "</b><small>" + o[2] + "</small></span>" + (i.status === o[0] ? "<span class=\"cur\">Now</span>" : "") + "</button>").join("") + "</div><p class=\"err\" id=\"err\" role=\"alert\"></p>");
+}
+function askDate(i) {
+  show(headHtml(i) + "<div class=\"datestep\"><label for=\"edate\">When is the event?</label><input id=\"edate\" type=\"date\" min=\"" + todayIso() + "\">" +
+    "<div class=\"go\"><button class=\"btn\" type=\"button\" id=\"mk\" data-mk=\"" + i.id + "\" disabled>Create the booking</button><button class=\"btn ghost\" type=\"button\" data-mk=\"" + i.id + "\" data-skip>Don’t know yet</button><button class=\"linkbtn\" type=\"button\" data-item=\"" + i.id + "\">Back</button></div></div><p class=\"err\" id=\"err\" role=\"alert\"></p>");
+  $("#edate").addEventListener("input", e => { $("#mk").disabled = !e.target.value; });
+}
+async function setStatus(i, status, eventDate) {
+  if (status === i.status) { dlg.close(); return; }
+  if (status === "Waiting on deposit" && !i.date && eventDate === undefined) { askDate(i); return; }
+  dlg.querySelectorAll("button").forEach(b => b.disabled = true);
+  try {
+    const res = await server("setEnquiryStatus", { row: i.ref.row, name: i.name, status, eventDate: eventDate || "" });
+    dlg.close(); apply(res.data);
+    toast(status === "Waiting on deposit" ? i.name + " is now booking " + (res.id || "") + ", waiting on deposit." : status === "Cancelled" ? i.name + "’s enquiry is cancelled." : i.name + ": " + status.toLowerCase() + ".");
+  } catch (x) { dlg.querySelectorAll("button").forEach(b => b.disabled = b.id === "mk" && !$("#edate").value); $("#err").textContent = "Not saved. " + why(x); }
+}
+function openBooking(i) {
+  const b = i.ref, rows = [["Status", badge(i)], ["Next step", esc(txt(b.nextStep))], ["Package", esc(txt(b.pkg))], ["Total", num(b.total) ? money(num(b.total)) : ""], ["Paid so far", num(b.total) ? money(num(b.received)) : ""], ["Invoice", esc(txt(b.invoice))], ["Booking ID", esc(txt(b.id))], ["Notes", esc(txt(b.notes))]];
+  show(headHtml(i) + "<dl class=\"facts\">" + rows.filter(r => r[1]).map(r => "<dt>" + r[0] + "</dt><dd>" + r[1] + "</dd>").join("") + "</dl>");
+}
+
+/* ---------- add a booking ---------- */
+function newFields() {
+  const L = S.data.lists || {}, f = (key, kind, label, o) => Object.assign({ key, kind, label }, o || {});
+  return [
+    f("Client name", "text", "Client name", { wide: true, hint: "A repeat client? Type the name exactly as before." }),
+    f("Event date", "date", "Event date"), f("Event type", "pick", "Event type", { options: L["Event type"] || [], blank: "Choose" }),
+    f("Package", "pick", "Package", { options: (S.data.packages || []).map(p => p.name), blank: "Choose" }),
+    f("Custom price", "num", "Custom price", { hint: "Only for the Custom package." }),
+    f("Venue", "text", "Venue"), f("Suburb", "text", "Suburb"),
+    f("Region", "pick", "Region", { options: L["Region"] || [], blank: "Choose" }),
+    f("How they found us", "pick", "How they found us", { options: L["How they found us"] || [], blank: "Not sure" }),
+    f("Custom board and screen", "yes", "Custom board and screen"), f("Highlight reel", "yes", "Highlight reel"),
+    f("No power point", "yes", "No power point, so battery power"), f("Second event", "yes", "Second event"),
+    f("Extra hours", "num", "Extra hours"), f("Host hours", "num", "Host hours"), f("Extra days", "num", "Extra days"),
+    f("Travel fee", "num", "Travel fee ($)"), f("Discount", "num", "Discount ($)"),
+    f("Phone", "text", "Phone"), f("Email", "text", "Email"), f("Instagram", "text", "Instagram"),
+    f("Notes", "note", "Notes", { wide: true })
+  ];
+}
+function control(f, n) {
+  const id = "f" + n, lab = "<label for=\"" + id + "\">" + esc(f.label) + "</label>", hint = f.hint ? "<small>" + esc(f.hint) + "</small>" : "";
+  if (f.kind === "yes") return "<div class=\"fld tickf\"><input id=\"" + id + "\" type=\"checkbox\">" + lab + "</div>";
+  const c = f.kind === "pick" ? "<select id=\"" + id + "\"><option value=\"\">" + esc(f.blank) + "</option>" + f.options.map(o => "<option>" + esc(o) + "</option>").join("") + "</select>"
+    : f.kind === "note" ? "<textarea id=\"" + id + "\"></textarea>" : f.kind === "date" ? "<input id=\"" + id + "\" type=\"date\">"
+    : f.kind === "num" ? "<input id=\"" + id + "\" type=\"number\" inputmode=\"decimal\" min=\"0\" step=\"any\">" : "<input id=\"" + id + "\" type=\"text\" autocomplete=\"off\">";
+  return "<div class=\"fld" + (f.wide ? " wide" : "") + "\">" + lab + c + hint + "</div>";
+}
+function openNew() {
+  if (!S.data) return;
+  const fields = newFields();
+  show("<div class=\"d-head\"><div><h2 id=\"dlg-title\">Add a booking</h2><p>Goes into the next empty row of the tracker.</p></div>" + CLOSE + "</div>" +
+    "<form id=\"frm\" novalidate><div class=\"fields\">" + fields.map(control).join("") + "</div><p class=\"err\" id=\"err\" role=\"alert\"></p><button class=\"btn\" type=\"submit\" id=\"save\">Add to the tracker</button></form>", true);
+  form = fields;
+}
+dlg.addEventListener("submit", async e => {
+  e.preventDefault(); if (!form) return;
+  const out = {}, btn = $("#save"), err = $("#err");
+  form.forEach((f, n) => { const el = $("#f" + n), v = f.kind === "yes" ? (el.checked ? "Yes" : "") : el.value.trim(); if (v !== "") out[f.key] = v; });
+  if (!out["Client name"] || !out["Event date"] || !out["Package"]) { err.textContent = "A new booking needs a client name, an event date and a package."; return; }
+  btn.disabled = true; btn.textContent = "Saving…"; err.textContent = "";
+  try { const res = await server("addBooking", out); dlg.close(); apply(res.data); toast("Added " + out["Client name"] + " as " + (res.id || "a new booking") + "."); }
+  catch (x) { err.textContent = "Not saved. " + why(x); btn.disabled = false; btn.textContent = "Add to the tracker"; }
+});
+
+/* ---------- taps ---------- */
+document.addEventListener("click", e => {
+  if (e.target === dlg) { dlg.close(); return; }
+  if (e.target.id === "scrim") { if ($("#menu").classList.contains("open")) menu(false); else sheet(false); return; }
+  const t = e.target.closest("[data-tab],[data-menu-open],[data-menu-close],[data-fopen],[data-fclose],[data-freset],[data-acc],[data-tick],[data-month],[data-item],[data-opt],[data-mk],[data-new],[data-close],[data-refresh]");
+  if (!t) return;
+  const d = t.dataset, item = id => S.items.find(i => i.id === id);
+  if (d.tab) { e.preventDefault(); go(d.tab); if ($("#menu").classList.contains("open")) menu(false); }
+  else if (d.menuOpen != null) menu(true);
+  else if (d.menuClose != null) menu(false);
+  else if (d.fopen != null) sheet(true);
+  else if (d.fclose != null) sheet(false);
+  else if (d.freset != null) { Object.keys(S.f).forEach(k => S.f[k] = true); draw(); }
+  else if (d.acc) { S.acc = S.acc === d.acc ? "" : d.acc; draw(); }
+  else if (d.tick) { S.f[d.tick] = !S.f[d.tick]; draw(); }
+  else if (d.month) { const n = S.ym[0] * 12 + S.ym[1] + +d.month; S.ym = [Math.floor(n / 12), n % 12]; draw(); }
+  else if (d.opt) setStatus(item(d.id), d.opt);
+  else if (d.mk) setStatus(item(d.mk), "Waiting on deposit", d.skip != null ? "" : $("#edate").value);
+  else if (d.item) { const i = item(d.item); if (i) (i.booking ? openBooking : openPicker)(i); }
+  else if (d.new != null) openNew();
+  else if (d.close != null) dlg.close();
+  else if (d.refresh != null) load();
+});
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape" || dlg.open) return;
+  if ($("#menu").classList.contains("open")) menu(false); else if ($("#filter").classList.contains("open")) sheet(false);
+});
+matchMedia("(min-width:1000px)").addEventListener("change", () => { $("#menu").classList.remove("open"); $("#filter").classList.remove("open"); $("#scrim").classList.remove("on"); document.body.classList.remove("lock"); });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.data && !DEMO && !dlg.open && Date.now() - S.readAt > 120000) load(); });
+
+/* ---------- sample data, used only until the back end address is filled in above ---------- */
+let demoDb = null;
+function demoServer(fn, arg) {
+  const t = todayIso(), at = n => addDays(t, n), long = iso => { const p = dParts(iso); return p.d + " " + MONTHS[p.m] + " " + p.y; };
+  if (!demoDb) {
+    const far = dParts(at(62));
+    const bk = (row, client, date, status, type, venue, suburb, pkg, total, received, x) => Object.assign({ row, id: "B-" + String(row - 4).padStart(4, "0"), client, date, status, nextStep: "", phone: "", email: "", insta: "", type, venue, suburb, region: "Auckland", pkg, cancelled: "", notes: "", total, received, owing: status === "Cancelled" ? 0 : total - received, invoice: "INV-" + String(row - 4).padStart(4, "0") }, x || {});
+    const eq = (row, name, contact, type, date, message, status, what, bookingId) => ({ row, received: at(-row), name, contact, type, date, message, status, what: what || "", bookingId: bookingId || "" });
+    demoDb = {
+      bookings: [
+        bk(5, "Aroha", at(-10), "Completed", "Birthday", "Sample Hall", "Mt Eden", "Celebration hire", 570, 570, { nextStep: "Ask for review" }),
+        bk(6, "Mereana", at(10), "Booked", "Birthday", "Rooftop Room", "City", "Celebration hire", 450, 450, { phone: "021 555 0101" }),
+        bk(7, "Tavita", at(17), "Booked", "Birthday", "Harbour Lounge", "", "Celebration hire", 720, 150, { nextStep: "Balance due", email: "tavita@example.com" }),
+        bk(8, "Priya", at(24), "Waiting on deposit", "Engagement party", "Garden Pavilion", "Howick", "Celebration hire", 450, 0, { nextStep: "Get deposit" }),
+        bk(9, "Northside Night Market", at(31), "Booked", "Market / fair", "Northside Car Park", "Albany", "Custom", 300, 300),
+        bk(10, "Hana and Joe", at(45), "Waiting on deposit", "Wedding", "Vineyard Estate", "Kumeu", "Forever", 795, 0, { nextStep: "Get deposit" }),
+        bk(11, "Kiri", at(20), "Cancelled", "Birthday", "", "", "Celebration hire", 450, 0, { cancelled: "Yes" }),
+        bk(12, "Sam", "", "Date needed", "Wedding", "", "", "Classic", 550, 0, { nextStep: "Date needed" })
+      ],
+      enquiries: [
+        eq(2, "Rangi", "Instagram @sample.rangi", "Wedding", "", "", "Cancelled", "Cancelled"),
+        eq(3, "Tia Sample", "Phone 021 555 0142", "Birthday", MONTHS[far.m] + " " + far.y, "Venue: 12 Sample Road, Sunnyvale", "New"),
+        eq(4, "Daniel Sample", "Phone 022 555 0177", "Birthday", long(at(4)), "Venue: Rooftop Bar", "New"),
+        eq(5, "Mali Sample", "Phone 021 555 0190", "Wedding", long(at(11)), "Venue: Windsor Gardens", "Waiting on response"),
+        eq(6, "Jess", "Instagram @sample.jess", "Birthday", long(at(17)), "Venue: The Loft, Ponsonby", "New"),
+        eq(7, "Hana and Joe", "Phone 021 555 0123", "Wedding", long(at(45)), "Venue: Vineyard Estate", "Waiting on deposit", "Moved to bookings", "B-0006"),
+        eq(8, "Brightside Ltd", "Phone 09 555 0100", "Brand / corporate", "", "Staff party, date to be confirmed", "Waiting on response")
+      ],
+      lists: { "Event type": ["Wedding", "Engagement party", "Birthday", "Anniversary", "Baby shower", "Other celebration", "Brand / corporate", "Expo / show", "Market / fair"], "Region": ["Auckland", "Hamilton", "Waikato (other)"], "How they found us": ["Instagram", "Referral", "Repeat client"] },
+      packages: [{ name: "Classic", price: 550 }, { name: "Forever", price: 795 }, { name: "Celebration hire", price: 450 }, { name: "Custom", price: null }]
+    };
+  }
+  const db = demoDb, nextRow = () => Math.max(...db.bookings.map(b => b.row)) + 1;
+  let id = "";
+  if (fn === "setEnquiryStatus") {
+    const q = db.enquiries.find(x => x.row === arg.row && x.name === arg.name); if (!q) throw new Error("That enquiry has moved. Press Refresh.");
+    q.status = arg.status; q.what = arg.status === "Cancelled" ? "Cancelled" : ""; q.bookingId = "";
+    if (arg.status === "Waiting on deposit") {
+      const row = nextRow(), date = arg.eventDate || parseLoose(q.date) || ""; id = "B-" + String(row - 4).padStart(4, "0");
+      db.bookings.push({ row, id, client: q.name, date, status: date ? "Waiting on deposit" : "Date needed", nextStep: "Get deposit", phone: (/^Phone\s+(.+)/.exec(q.contact) || [])[1] || "", email: "", insta: (/^Instagram\s+(.+)/.exec(q.contact) || [])[1] || "", type: q.type, venue: ((/venue:\s*([^\n]+)/i.exec(q.message) || [])[1] || "").trim(), suburb: "", region: "", pkg: "", cancelled: "", notes: "", total: 0, received: 0, owing: 0, invoice: "" });
+      q.what = "Moved to bookings"; q.bookingId = id;
+    }
+  } else if (fn === "addBooking") {
+    const row = nextRow(), p = db.packages.find(x => x.name === arg["Package"]), total = num(arg["Custom price"]) || (p && p.price) || 0; id = "B-" + String(row - 4).padStart(4, "0");
+    db.bookings.push({ row, id, client: arg["Client name"], date: arg["Event date"], status: "Waiting on deposit", nextStep: "Get deposit", phone: arg["Phone"] || "", email: arg["Email"] || "", insta: arg["Instagram"] || "", type: arg["Event type"] || "", venue: arg["Venue"] || "", suburb: arg["Suburb"] || "", region: arg["Region"] || "", pkg: arg["Package"], cancelled: "", notes: arg["Notes"] || "", total, received: 0, owing: total, invoice: "" });
+  }
+  return { id, data: JSON.parse(JSON.stringify(Object.assign({ readAt: Date.now() }, db))) };
+}
+
+/* ---------- start ---------- */
+(() => { let p = "M0 0h500v6H0zM0 0h6v57h-6z"; for (let x = 22, k = 0; x <= 472; x += 25, k++) p += "M" + x + " 0h6v" + [23, 39, 23, 57][k % 4] + "h-6z"; p += "M494 0h6v57h-6z"; document.querySelectorAll(".ruler").forEach(el => el.setAttribute("d", p)); })();
+{ const t = todayIso(); S.ym = [+t.slice(0, 4), +t.slice(5, 7) - 1]; }
+drawMenu(); drawFilter(); drawCal(); drawList();
+load();
+</script>
+</body>
+</html>
