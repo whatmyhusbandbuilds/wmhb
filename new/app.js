@@ -88,12 +88,18 @@ function readTerms(data) {
 const FIRST_DEPOSIT_UP_TO = 8;
 /* A deposit written as a share of the total is rounded to the nearest this many dollars. */
 const DEPOSIT_ROUNDS_TO = 50;
-/** The kind of event some words are about, so a package and a booking can be matched. '' when it can't be told. */
-function eventKind(words) {
-  const t = txt(words).toLowerCase();
-  return /wedding/.test(t) ? "Weddings" : /corporate|brand/.test(t) ? "Corporate" : /market|expo|fair|\bshow\b/.test(t) ? "Markets"
-    : /celebrat|birthday|part(y|ies)|engagement|anniversar|shower/.test(t) ? "Celebrations" : "";
-}
+/* The four kinds of event, the same four as the calendar's filter, and the event types on the Settings tab that belong to each.
+   This list is fixed (Aadil, 26 Nov 2026). It is not worked out from the wording: an event type that is not on it has no kind.
+   names = what a package's "For" column may call the kind. */
+const EVENT_KINDS = [
+  { names: ["Weddings"], types: ["Wedding"] },
+  { names: ["Birthdays & celebrations", "Celebrations"], types: ["Engagement party", "Birthday", "Anniversary", "Baby shower", "Other celebration"] },
+  { names: ["Corporate"], types: ["Brand / corporate"] },
+  { names: ["Markets & fairs", "Markets"], types: ["Expo / show", "Market / fair"] }
+];
+const sameWords = (a, b) => { const tidy = v => txt(v).toLowerCase().replace(/\band\b/g, "&").replace(/\s+/g, " "); return tidy(a) === tidy(b); };
+const kindOfType = type => EVENT_KINDS.find(k => k.types.some(t => sameWords(t, type))) || null;
+const kindOfPackage = p => EVENT_KINDS.find(k => k.names.some(n => sameWords(n, p.for))) || null;
 /**
  * The deposit for one booking, or null when it can't be told (then no amount is shown).
  * It is the Deposit of the booking's package. A package with none (Custom) takes the deposit of the packages for the same kind of event.
@@ -108,9 +114,10 @@ function depositOf(b, T, total) {
   };
   const own = T.packages[txt(b.pkg)], fromOwn = own ? read(own.deposit) : null;
   if (fromOwn != null) return fromOwn;
-  const kind = eventKind(b.type);
-  const same = Object.keys(T.packages).map(name => T.packages[name]).filter(p => txt(p.deposit) && eventKind(p.for) === kind).map(p => txt(p.deposit)).filter((d, i, a) => a.indexOf(d) === i);
-  return kind && same.length === 1 ? read(same[0]) : null;
+  const kind = kindOfType(b.type);
+  if (!kind) return null;
+  const same = Object.keys(T.packages).map(name => T.packages[name]).filter(p => txt(p.deposit) && kindOfPackage(p) === kind).map(p => txt(p.deposit)).filter((d, i, a) => a.indexOf(d) === i);
+  return same.length === 1 ? read(same[0]) : null;
 }
 /** A date written inside a line of words, such as "Balance due Sat 5 Dec". near = a date it should be close to. */
 function dateIn(words, near) {
@@ -139,9 +146,11 @@ function moneyOf(b) {
   const written = dateIn(b.nextStep, date || today);
   let deposit = depositOf(b, T, total);
   if (deposit != null) deposit = Math.max(0, Math.min(deposit - received, owing));        /* what is left of the deposit */
-  const depositNext = kind === "waiting" && deposit !== 0;
+  /* The tracker marks a booking Booked once the smallest deposit (Prices C29) is in, even if its own deposit is bigger.
+     So a Booked booking can still have the rest of its deposit as its next step. */
+  const depositNext = st !== "Completed" && (deposit == null ? kind === "waiting" : deposit > 0);
   /* A deposit is due 48 hours after its invoice is sent. The tracker has no invoice-sent date yet, so it shows with no date. */
-  const next = owing <= 0 ? null : depositNext ? { what: "Deposit", amount: deposit, due: written } : { what: "Balance", amount: owing, due: written || balanceDue };
+  const next = owing <= 0 ? null : depositNext ? { what: received > 0 ? "Rest of deposit" : "Deposit", amount: deposit, due: written } : { what: "Balance", amount: owing, due: written || balanceDue };
   const plan = [];
   if (owing > 0 && depositNext && deposit) { plan.push({ amount: deposit, due: written || today }); if (owing > deposit) plan.push({ amount: owing - deposit, due: balanceDue || date }); }
   else if (owing > 0) plan.push({ amount: owing, due: written || balanceDue || date });

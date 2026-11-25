@@ -54,8 +54,8 @@ function demoServer(fn, arg) {
       },
       /* name, who it is for, price, hours, takes a bond, days before the event the balance is due, deposit */
       packs: [["Classic", "Weddings", 550, 3, "Yes", 28, "30% of the total"], ["Forever", "Weddings", 795, 6, "Yes", 28, "30% of the total"],
-        ["Celebration hire", "Celebrations", 450, 3, "Yes", 14, "$200"], ["Corporate hire", "Corporate", 900, 4, "Yes", 28, "30% of the total"],
-        ["Market hire", "Markets", 250, 4, "No", 14, "$150"], ["Custom", "Anything", "", "", "Yes", 14, ""]],
+        ["Celebration hire", "Birthdays & celebrations", 450, 3, "Yes", 14, "$200"], ["Corporate hire", "Corporate", 900, 4, "Yes", 28, "30% of the total"],
+        ["Market hire", "Markets & fairs", 250, 4, "No", 14, "$150"], ["Custom", "Anything", "", "", "Yes", 14, ""]],
       terms: [["Booking terms", ""], ["Smallest deposit that marks Booked", "$150"], ["Refundable bond", "$250"], ["Old 7-day terms up to invoice no.", "5"]]
     };
   }
