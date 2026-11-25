@@ -40,7 +40,7 @@ function build(data) {
     const kind = st === "Booked" || st === "Completed" ? "booked" : st === "Waiting on deposit" ? "waiting" : received > 0 ? "booked" : "waiting";
     if (kind === "waiting" || owing > 0) toChase++;
     const date = /^\d{4}-\d{2}-\d{2}$/.test(txt(b.date)) ? b.date : null;
-    items.push({ id: "b" + b.row, booking: true, kind, live: !date || date >= today, name, short: name.split(/\s+/)[0], date, dateText: "",
+    items.push({ id: "b" + b.row, booking: true, kind, live: !date || date >= today, name, short: calendarName(name), date, dateText: "",
       type: txt(b.type), group: groupOf(b.type), venue: [txt(b.venue), txt(b.suburb)].filter(Boolean).join(", "), contact: "", owing, ref: b });
   }
   for (const q of data.enquiries || []) {
@@ -48,7 +48,7 @@ function build(data) {
     if (st !== "New" && st !== "Waiting on response") continue;
     if (st === "New") toAnswer++;
     const venue = (/venue:\s*([^\n]+)/i.exec(txt(q.message)) || [])[1] || "";
-    items.push({ id: "q" + q.row, booking: false, kind: "enquiry", live: true, status: st, name, short: name.split(/\s+/)[0], date: parseLoose(q.date), dateText: txt(q.date),
+    items.push({ id: "q" + q.row, booking: false, kind: "enquiry", live: true, status: st, name, short: calendarName(name), date: parseLoose(q.date), dateText: txt(q.date),
       type: txt(q.type), group: groupOf(q.type), venue: venue.trim(), contact: txt(q.contact), owing: 0, ref: q });
   }
   const rank = { booked: 0, waiting: 1, enquiry: 2 };
@@ -69,7 +69,7 @@ function badges(i) {
   return "<span class=\"badge " + i.kind + "\">" + esc(t) + "</span>" + (clashes(i) ? "<span class=\"badge clashb\">Clash</span>" : "");
 }
 /* In a sentence a name loses any note in brackets: "Jess (example)" reads as "Jess". */
-const plain = i => i.name.replace(/\s*\([^)]*\)\s*$/, "") || i.name;
+const plain = i => withoutBrackets(i.name);
 const said = i => plain(i) + (i.kind === "booked" ? " is booked" : i.kind === "waiting" ? " is waiting on deposit" : " has enquired");
 const word = i => i.kind === "booked" ? "booked" : i.kind === "waiting" ? "waiting on deposit" : "enquiry";
 
@@ -172,7 +172,8 @@ function rowHtml(i) {
   const p = i.date ? dParts(i.date) : null, mon = /^([A-Za-z]{3})[a-z]*\s+(\d{4})$/.exec(i.dateText);
   const when = p ? "<span>" + p.wd + "</span><span>" + p.d + " " + p.mo + "</span>" : "<span>No date</span><span>" + esc(mon ? mon[1] + " " + mon[2] : i.dateText || "yet") + "</span>";
   const body = "<span class=\"when\">" + when + "</span><span class=\"who\"><span class=\"n\">" + esc(i.name) + "</span><span class=\"s\">" + esc([i.type, i.venue].filter(Boolean).join(", ")) + "</span><span class=\"bs\">" + badges(i) + "</span></span>";
-  return i.booking ? "<div class=\"row\">" + body + "</div>" : "<button type=\"button\" class=\"row\" data-do=\"item\" data-item=\"" + i.id + "\" data-fid=\"r-" + i.id + "\" aria-haspopup=\"dialog\">" + body + "<span class=\"chg\">Change</span></button>";
+  /* a booking shows its invoice number, the reference used everywhere */
+  return i.booking ? "<div class=\"row\">" + body + (txt(i.ref.invoice) ? "<span class=\"inv\">" + esc(i.ref.invoice) + "</span>" : "") + "</div>" : "<button type=\"button\" class=\"row\" data-do=\"item\" data-item=\"" + i.id + "\" data-fid=\"r-" + i.id + "\" aria-haspopup=\"dialog\">" + body + "<span class=\"chg\">Change</span></button>";
 }
 function drawList() {
   if (!$("#list")) return;

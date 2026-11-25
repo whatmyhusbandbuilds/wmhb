@@ -39,7 +39,81 @@ const RULER = (() => { let p = "M0 0h500v6H0zM0 0h6v57h-6z"; for (let x = 22, k 
 const LOGO = "<div class=\"logo\" role=\"img\" aria-label=\"wmhb\"><div>wmhb</div><svg aria-hidden=\"true\" width=\"52\" height=\"8\" viewBox=\"0 0 500 57\"><path d=\"" + RULER + "\"/></svg></div>";
 
 /* ---------- what the app knows ---------- */
-const S = { tab: "clients", data: null, readAt: 0, trouble: "" };
+const S = { tab: "clients", data: null, readAt: 0, trouble: "", T: null, payBy: {} };
+
+/* ---------- names ---------- */
+/* "Glow Studio (Mia)" is a business with its contact in brackets. */
+const contactOf = name => (/\(([^)]+)\)\s*$/.exec(name) || [])[1] || "";
+const withoutBrackets = name => name.replace(/\s*\([^)]*\)\s*$/, "") || name;
+/** The short name under a calendar date: the contact if there is one in brackets, otherwise the first name. */
+const calendarName = name => contactOf(name) || name.split(/\s+/)[0];
+/** The short name on a chip: the business, or the first name. */
+const chipName = name => contactOf(name) ? withoutBrackets(name) : name.split(/\s+/)[0];
+
+/* ---------- the booking terms: read from the Prices tab, as the tracker sends it ---------- */
+const firstNumber = v => { const m = /\d[\d,]*(?:\.\d+)?/.exec(String(v == null ? "" : v)); return m ? Number(m[0].replace(/,/g, "")) : null; };
+const sum = (list, key) => list.reduce((s, x) => s + num(x[key || "amount"]), 0);
+/**
+ * No amount and no number of days is written in this app. They come from the Prices tab:
+ * the packages table (which packages take a bond, and how long before the event the balance is due)
+ * and the booking terms under it (the deposit and the bond).
+ */
+function readTerms(data) {
+  const g = (data && data.prices) || [], cell = (r, c) => txt(g[r] && g[r][c]);
+  const T = { deposit: null, depositPart: null, bond: null, oldTo: 0, oldDays: null, packages: {} };
+  const hr = g.findIndex(r => r && txt(r[1]) === "Package");
+  if (hr >= 0) {
+    const head = g[hr].map(txt), find = (re, spare) => { const i = head.findIndex((h, c) => c > 1 && re.test(h)); return i >= 0 ? i : spare; };
+    const bondCol = find(/bond/i, 5), dueCol = find(/due/i, 15), weeks = /week/i.test(head[dueCol] || "");
+    for (let r = hr + 1; r < g.length && cell(r, 1); r++) {
+      const due = firstNumber(cell(r, dueCol));
+      T.packages[cell(r, 1)] = { bond: /^yes$/i.test(cell(r, bondCol)), dueDays: due == null ? null : due * (weeks ? 7 : 1) };
+    }
+  }
+  g.forEach((row, r) => {
+    const label = cell(r, 1), value = cell(r, 2);
+    if (/^deposit/i.test(label)) { if (/%/.test(value)) T.depositPart = firstNumber(value) / 100; else T.deposit = firstNumber(value); }
+    else if (/^(refundable )?bond/i.test(label)) T.bond = firstNumber(value);
+    else if (/^old .*terms/i.test(label)) { T.oldTo = firstNumber(value) || 0; T.oldDays = firstNumber(label); }
+  });
+  return T;
+}
+/** A date written inside a line of words, such as "Balance due Sat 5 Dec". near = a date it should be close to. */
+function dateIn(words, near) {
+  const m = /(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3})[a-z]*\.?(?:\s+(\d{4}))?/.exec(txt(words)); if (!m) return null;
+  const mo = MO.findIndex(x => x.toLowerCase() === m[2].toLowerCase()); if (mo < 0) return null;
+  if (m[3]) return isoOf(+m[3], mo, +m[1]);
+  const y = +near.slice(0, 4), tries = [y - 1, y, y + 1].map(yy => isoOf(yy, mo, +m[1]));
+  return tries.sort((a, b) => Math.abs(ms(a) - ms(near)) - Math.abs(ms(b) - ms(near)))[0];
+}
+/**
+ * What the app works out about one booking's money: what is still to pay and by when, and where the bond is at.
+ * kind: booked or waiting (on deposit). next: the next amount due. plan: every amount still to come, with its due date.
+ * bond: none (this package takes no bond), due, held or back.
+ */
+function moneyOf(b) {
+  const T = S.T || readTerms(null), today = todayIso(), pkg = T.packages[txt(b.pkg)], st = txt(b.status);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(txt(b.date)) ? b.date : null;
+  const total = num(b.total), received = num(b.received), owing = Math.max(0, num(b.owing));
+  const kind = st === "Booked" || st === "Completed" ? "booked" : st === "Waiting on deposit" ? "waiting" : received > 0 ? "booked" : "waiting";
+  const pays = S.payBy[b.invoice] || [], bondIn = sum(pays.filter(p => p.what === "Bond in")), bondBack = sum(pays.filter(p => p.what === "Bond back"));
+  const said = txt(b.bond).toLowerCase();
+  const bond = said === "returned" || (bondBack > 0 && bondBack >= bondIn) ? "back" : said === "held" || bondIn > bondBack ? "held" : pkg && pkg.bond ? "due" : "none";
+  const invNo = /^INV-(\d+)$/.exec(txt(b.invoice));
+  const dueDays = invNo && T.oldTo && T.oldDays && +invNo[1] <= T.oldTo ? T.oldDays : pkg ? pkg.dueDays : null;
+  const balanceDue = date && dueDays != null ? addDays(date, -dueDays) : null;
+  const written = dateIn(b.nextStep, date || today);
+  let deposit = T.depositPart != null ? Math.round(total * T.depositPart) : T.deposit;
+  if (deposit != null) deposit = Math.min(deposit, owing);
+  const next = owing <= 0 ? null : kind === "waiting" ? { what: "Deposit", amount: deposit, due: written } : { what: "Balance", amount: owing, due: written || balanceDue };
+  const plan = [];
+  if (owing > 0 && kind === "waiting" && deposit) { plan.push({ amount: deposit, due: written || today }); if (owing > deposit) plan.push({ amount: owing - deposit, due: balanceDue || date }); }
+  else if (owing > 0) plan.push({ amount: owing, due: written || balanceDue || date });
+  return { kind, done: st === "Completed", date, total, received, owing, next, plan, balanceDue, bond, bondAmount: T.bond, bondHeld: bond === "held" ? (bondIn - bondBack > 0 ? bondIn - bondBack : num(T.bond)) : 0 };
+}
+const live = b => txt(b.client) && txt(b.status) !== "Cancelled" && txt(b.cancelled) !== "Yes";
+/** "Birthday, Sat 12 Dec, INV-0003" and the like. The year shows only when it is not this year. */
+const dayOf = iso => iso ? fmt(iso) + (dParts(iso).y !== +todayIso().slice(0, 4) ? " " + dParts(iso).y : "") : "no date yet";
 
 /* ---------- the tabs ---------- */
 const ICON = {
@@ -55,7 +129,7 @@ const ICON = {
 /* next = a tab that is not designed yet (Partners and Settings). later = a tab that is designed, and built in a later stage. */
 const TABS = [
   { id: "clients", label: "Clients" },
-  { id: "money", label: "Money", later: "stage 2" },
+  { id: "money", label: "Money" },
   { id: "eventday", label: "Event day", later: "stage 3" },
   { id: "videos", label: "Videos", later: "stage 5" },
   { id: "designs", label: "Designs", later: "stage 4" },
@@ -63,7 +137,8 @@ const TABS = [
   { id: "partners", label: "Partners", group: "Business", next: ["Decor businesses that send you clients", "Who referred who, and the 10% fee owed"] },
   { id: "settings", label: "Settings", end: true, next: ["Aadil’s and Sara’s logins", "Email signature and templates"] }
 ];
-/* A screen adds itself here: SCREENS.clients = { html(), fill(), right } */
+/* A screen adds itself here: SCREENS.clients = { html(), fill(), right, side }.
+   right = a button for the top right. side = what sits right of the title on a laptop, if not that button. */
 const SCREENS = {};
 
 function drawMenu() {
@@ -88,13 +163,21 @@ function focusSoon(el, tries) {
 }
 const menuOpen = () => $("#menu").classList.contains("open");
 
-/** The top of every screen: menu button and logo on the phone, then the title. right = a button for the right-hand side. */
-function headHtml(title, right) {
-  return "<div class=\"head\"><div class=\"bar ph\"><div class=\"l\"><button class=\"mbtn\" type=\"button\" data-do=\"menu-open\" aria-label=\"Open menu\" aria-expanded=\"false\" aria-controls=\"menu\"><svg aria-hidden=\"true\" width=\"26\" height=\"26\" viewBox=\"0 0 24 24\"><path d=\"M4 7h16M4 12h16M4 17h16\"/></svg></button>" + LOGO + "</div>" + (right || "") + "</div>" +
-    "<div class=\"titlerow\"><h1>" + esc(title) + "</h1>" + (right ? right.replace("class=\"btn\"", "class=\"btn lp\"") : "") + "</div></div>";
+/* The Refresh button: at the top of every screen on the phone, and at the top of the side menu on a laptop. */
+const REFRESH_ICON = "<svg aria-hidden=\"true\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\"><path d=\"M20 12a8 8 0 1 1-2.4-5.7M20 4.5v4.6h-4.6\"/></svg>";
+const REFRESH = "<button class=\"rbtn wm-card\" type=\"button\" data-do=\"refresh\" data-fid=\"refresh\" aria-label=\"Refresh\">" + REFRESH_ICON + "</button>";
+
+/**
+ * The top of every screen: menu button, logo and Refresh on the phone, then the title.
+ * right = a button for the top right. side = what sits right of the title on a laptop (the same button, unless given).
+ * cls = a class for a screen whose design has a different gap under the title.
+ */
+function headHtml(title, right, side, cls) {
+  return "<div class=\"head" + (cls ? " " + cls : "") + "\"><div class=\"bar ph\"><div class=\"l\"><button class=\"mbtn\" type=\"button\" data-do=\"menu-open\" aria-label=\"Open menu\" aria-expanded=\"false\" aria-controls=\"menu\"><svg aria-hidden=\"true\" width=\"26\" height=\"26\" viewBox=\"0 0 24 24\"><path d=\"M4 7h16M4 12h16M4 17h16\"/></svg></button>" + LOGO + "</div><div class=\"r\">" + REFRESH + (right || "") + "</div></div>" +
+    "<div class=\"titlerow\"><h1>" + esc(title) + "</h1>" + (side != null ? side : right ? right.replace("class=\"btn\"", "class=\"btn lp\"") : "") + "</div></div>";
 }
 const boxHtml = (lead, lines) => "<div class=\"next wm-card\"><p>" + esc(lead) + "</p>" + lines.map(x => "<div><i aria-hidden=\"true\"></i><span>" + esc(x) + "</span></div>").join("") + "</div>";
-const footHtml = () => "<div class=\"foot\"><span id=\"fresh\" role=\"status\"></span><button class=\"linkbtn\" type=\"button\" data-do=\"refresh\">Refresh</button></div>";
+const footHtml = () => "<p class=\"foot\" id=\"fresh\"></p>";
 
 /** Shows a tab. Draws the whole screen again, so its parts arrive one after another. */
 function go(tab) {
@@ -104,14 +187,14 @@ function go(tab) {
   if (t.next) body = headHtml(title) + boxHtml("We design this screen next. It will have:", t.next);
   else if (!screen) body = headHtml(title) + boxHtml("This screen is designed and not built yet.", ["It gets built in " + t.later + "."]);
   else if (!S.data) body = headHtml(title, screen.right) + (S.trouble ? troubleHtml() : "<p class=\"wait wm-card\" role=\"status\"><span>Loading your bookings…</span></p>");
-  else body = headHtml(title, screen.right) + troubleHtml() + screen.html() + footHtml();
+  else body = headHtml(title, screen.right, !phone() && screen.side ? screen.side() : null, screen.head) + troubleHtml() + screen.html() + footHtml();
   $("#view").innerHTML = "<section class=\"view wm-scroll\" aria-label=\"" + esc(t.label) + "\">" + body + "</section>";
-  if (screen && S.data && !t.next) screen.fill();
+  if (screen && S.data && !t.next) screen.fill(true);
   drawMenu(); stamp(); scrollTo(0, 0);
 }
 /** Brings the screen up to date after the data changes, without drawing it all again. */
 function refresh() {
-  if (S.data) build(S.data);
+  if (S.data) { S.T = readTerms(S.data); S.payBy = {}; (S.data.payments || []).forEach(p => (S.payBy[p.invoice] = S.payBy[p.invoice] || []).push(p)); build(S.data); }
   const screen = SCREENS[S.tab];
   if (screen && S.data && $("#view [data-screen=" + S.tab + "]")) keepFocus(() => { drawMenu(); screen.fill(); });
   else keepFocus(() => go(S.tab));
@@ -159,15 +242,18 @@ const why = x => x && x.told && x.message ? x.message.replace(/^Error:\s*/, "") 
 
 function apply(data) { S.data = data; S.readAt = data.readAt || Date.now(); S.trouble = ""; refresh(); }
 let busy = false;
-async function load() {
+/** Reads everything from the tracker again. asked = someone pressed Refresh, so say when it is done. */
+async function load(asked) {
   if (!DEMO && !KEY) { S.trouble = "This device doesn’t have the key yet. Open the full private link you were sent, then add that page to your home screen."; go(S.tab); return; }
-  if (busy) return; busy = true;
-  try { apply((await server("getData")).data); }
-  catch (x) {
+  if (busy) return; busy = true; $("#app").classList.add("reading");
+  try {
+    apply((await server("getData")).data);
+    if (asked) toast(DEMO ? "Up to date." : "Up to date. Read from the tracker at " + clock(S.readAt) + ".");
+  } catch (x) {
     if (S.data) toast("Couldn’t read the tracker. " + why(x));
     else { S.trouble = "Couldn’t read the tracker. " + why(x); go(S.tab); }
   }
-  finally { busy = false; }
+  finally { busy = false; $("#app").classList.remove("reading"); }
 }
 
 /**
@@ -214,7 +300,7 @@ const TAPS = {
   "menu-open": () => menu(true),
   "menu-close": () => menu(false),
   "close": () => hide(),
-  "refresh": () => { if (!S.data) { S.trouble = ""; go(S.tab); } load(); }
+  "refresh": () => { if (!S.data) { S.trouble = ""; go(S.tab); } load(true); }
 };
 document.addEventListener("click", e => {
   if (e.target === dlg) {                /* a tap on the dark layer around the sheet closes it */

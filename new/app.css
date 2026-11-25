@@ -251,7 +251,7 @@ dialog h2{margin:2px 0 4px;font-size:28px;font-weight:900;letter-spacing:-.04em;
 .fld{min-width:0}
 .fld label{display:block;margin-bottom:4px;font-size:14px;font-weight:700}
 .fld small{display:block;margin-top:4px;font-size:13px;color:var(--mute)}
-.inp{display:block;width:100%;min-height:48px;padding:0 12px;border:1.5px solid var(--text);border-radius:4px;color:var(--text);font:600 17px var(--font);-webkit-appearance:none;appearance:none}
+.inp{display:block;width:100%;min-height:51px;padding:0 12px;border:1.5px solid var(--text);border-radius:4px;color:var(--text);font:600 17px var(--font);-webkit-appearance:none;appearance:none}
 .inp::placeholder{color:var(--mute);opacity:1}
 select.inp{padding-right:36px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23FAFAF7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center,url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNDAiIGhlaWdodD0iMTQwIj48ZmlsdGVyIGlkPSJuIj48ZmVUdXJidWxlbmNlIHR5cGU9ImZyYWN0YWxOb2lzZSIgYmFzZUZyZXF1ZW5jeT0iMC45IiBudW1PY3RhdmVzPSIyIiBzdGl0Y2hUaWxlcz0ic3RpdGNoIi8+PGZlQ29sb3JNYXRyaXggdmFsdWVzPSIwIDAgMCAwIDEgIDAgMCAwIDAgMSAgMCAwIDAgMCAxICAwIDAgMCAwLjA5IDAiLz48L2ZpbHRlcj48cmVjdCB3aWR0aD0iMTQwIiBoZWlnaHQ9IjE0MCIgZmlsdGVyPSJ1cmwoI24pIi8+PC9zdmc+),linear-gradient(180deg,#38352C 0,#27251F 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.16),inset 0 -1px 0 rgba(0,0,0,.55),0 2px 0 rgba(0,0,0,.6),0 14px 26px rgba(0,0,0,.5)}
 select.inp option{background:#27251F;color:var(--text)}
@@ -323,3 +323,147 @@ select.inp option{background:#27251F;color:var(--text)}
   .scrim,.toast,.plus i.v,.coll,.coll>div,.coll>div>div,.box{transition:none!important}
   dialog::backdrop{animation:none}
 }
+
+/* ======================================================================
+   Stage 2: the Refresh button, invoice numbers on the Clients list, and Money.
+   ====================================================================== */
+
+/* ---------- the Refresh button ---------- */
+.bar .r{display:flex;align-items:center;gap:8px}
+.rbtn{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;gap:8px;flex-shrink:0;padding:0;border:1.5px solid var(--text);border-radius:4px;color:var(--text);font:800 15px var(--font)}
+.rbtn svg{fill:none;stroke:var(--text);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.rbtn.wide{width:auto;padding:0 14px}
+.reading .rbtn svg{animation:rbtnTurn 800ms linear infinite}
+@keyframes rbtnTurn{to{transform:rotate(360deg)}}
+
+/* ---------- clients: the invoice number on a booking's row ---------- */
+.row .inv{flex-shrink:0;padding-top:3px;font-size:12px;font-weight:700;color:var(--mute)}
+
+/* ---------- money: the period ---------- */
+.head.h8{padding-bottom:8px}
+.segbox{padding:4px 20px 6px}
+.segs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:4px;border-radius:8px}
+.wm-seg{min-height:44px;border:0;border-radius:6px;background:transparent;color:var(--text);font:800 15px var(--font)}
+.wm-seg[aria-pressed=true]{background-color:var(--text);color:var(--ink)}
+.pbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}
+.pbar button{width:44px;height:44px;border:1.5px solid var(--text);border-radius:4px;background:transparent;font:800 18px var(--font);color:var(--text)}
+.pbar div{font-size:20px;font-weight:900;letter-spacing:-.03em}
+
+/* ---------- money: the numbers ---------- */
+.nums{margin:0 20px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;border-bottom:1.5px solid var(--text)}
+.nums>div{min-width:0;padding:10px 0}
+.nums .nl{font-size:12px;font-weight:800;color:var(--mute);line-height:1.2}
+.nums .nv{font-size:24px;font-weight:900;letter-spacing:-.04em;line-height:1.15}
+.nums .ns{font-size:11px;color:var(--mute);line-height:1.25}
+.expd{margin:14px 20px 0;padding:16px;border:1.5px solid var(--text);border-radius:6px}
+.expd .nl{font-size:14px;font-weight:800;color:var(--mute)}
+.expd .nv{font-size:44px;font-weight:900;letter-spacing:-.05em;line-height:1.05}
+.expd .ns{font-size:13px;color:var(--mute);line-height:1.35}
+.bank{margin:10px 20px 0;padding:12px 16px;border:1.5px solid var(--line);border-radius:6px;display:flex;align-items:center;gap:12px}
+.bank .t{flex:1;min-width:0}
+.bank .t div:first-child{font-size:14px;font-weight:800}
+.bank .t div+div{font-size:12px;color:var(--mute);line-height:1.35}
+.bank .v{font-size:26px;font-weight:900;letter-spacing:-.04em;flex-shrink:0}
+
+/* ---------- money: clients ---------- */
+.mh{padding:22px 20px 0;font-size:15px;font-weight:800;color:var(--mute)}
+.msecs{padding:0 20px}
+.msec{border-bottom:1.5px solid var(--line)}
+.msec .acch .plus{width:28px;height:28px}
+.msec .acch .plus i{left:7px;right:7px}
+.mcards{padding:4px 0 6px}
+.ccard{display:block;width:100%;margin:0 0 10px;padding:14px;border:1.5px solid var(--line);border-radius:6px;color:var(--text);font-family:var(--font);text-align:left}
+.ccard .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.ccard .top>span:first-child{min-width:0}
+.ccard .n{display:block;font-size:17px;font-weight:800;line-height:1.2}
+.ccard .s{display:block;font-size:13px;color:var(--mute)}
+.ccard .inv,.brow .inv{font-size:12px;font-weight:700;color:var(--mute);flex-shrink:0}
+.ccard .track{display:block;height:12px;margin:12px 0 6px;border-radius:6px;background:var(--tint);overflow:hidden}
+.ccard .bar{display:block;height:100%;background:var(--green)}
+.ccard .line{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.ccard .line>span:first-child{font-size:14px;font-weight:700}
+.pill2{padding:2px 9px;border-radius:999px;background:var(--green);color:#fff;border:2px solid var(--green);font-size:12px;font-weight:800;white-space:nowrap}
+.pill2.waiting{background:var(--yellow);color:var(--ink);border-color:var(--ink)}
+.pill2.over{background:var(--faint);color:var(--mute);border:1.5px solid var(--strong)}
+.ccard .ft{display:block;margin-top:8px;padding-top:8px;border-top:1.5px solid var(--line);font-size:13px;font-weight:600;line-height:1.45}
+.ccard .ft span{display:block}
+.ccard .ft .bd{color:var(--mute)}
+
+/* ---------- money: expenses ---------- */
+.xhead{display:flex;justify-content:space-between;align-items:center;padding:22px 20px 4px}
+.xhead h3,.bhead h3{font-size:15px;font-weight:800;color:var(--mute)}
+.xhead .cardbtn{font-size:14px}
+.xrows,.brows{padding:0 20px}
+.xrow{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1.5px solid var(--line)}
+.xrow .n{flex:1;min-width:0;font-size:15px;font-weight:800}
+.xrow .c{font-size:13px;color:var(--mute)}
+.xrow .v{width:64px;text-align:right;font-size:15px;font-weight:800}
+.xall{padding:0}
+.xitem{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1.5px solid var(--line)}
+.xitem .d{width:76px;flex-shrink:0;font-size:13px;font-weight:700;color:var(--mute)}
+.xitem .w{flex:1;min-width:0}
+.xitem .w span:first-child{display:block;font-size:15px;font-weight:600;line-height:1.25}
+.xitem .w span+span{display:block;font-size:12px;color:var(--mute)}
+.xitem .v{font-size:15px;font-weight:800}
+
+/* ---------- money: bonds, held apart ---------- */
+.bhead{padding:22px 20px 4px}
+.bhead p{margin:2px 0 0;font-size:13px;color:var(--mute);line-height:1.35}
+.brow{width:100%;min-height:48px;display:flex;align-items:center;gap:10px;padding:8px 0;border:0;border-bottom:1.5px solid var(--line);background:transparent;color:var(--text);font-family:var(--font);text-align:left}
+.brow i{width:14px;height:14px;flex-shrink:0;border-radius:50%;border:1.5px solid #9A9584}
+.brow i.held{border:0;background:var(--text)}
+.brow .t{flex:1;min-width:0}
+.brow .t span:first-child{display:block;font-size:15px;font-weight:800;line-height:1.25}
+.brow .t span+span{display:block;font-size:13px;font-weight:600;line-height:1.3}
+.brow .t .back{color:var(--mute)}
+.brow .t .held{font-weight:800}
+
+/* ---------- money: the client sheet and the expense sheet ---------- */
+dialog h2.tight{margin:2px 0 2px}
+.tot{display:flex;gap:12px;margin:14px 0 4px;padding:12px 0;border-top:1.5px solid var(--text);border-bottom:1.5px solid var(--text)}
+.tot>div{flex:1;min-width:0}
+.tot>div>div:first-child{font-size:12px;font-weight:800;color:var(--mute)}
+.tot>div>div+div{font-size:20px;font-weight:900;letter-spacing:-.03em}
+.sh{padding:16px 0 8px;font-size:14px;font-weight:800;color:var(--mute)}
+.sh.first{padding:14px 0 4px}
+.sh.mid{padding:14px 0 8px}
+.prow{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1.5px solid var(--line);font-size:15px}
+.prow span:first-child{font-weight:600}
+.prow span+span{font-weight:800}
+.none{padding:7px 0;font-size:15px;color:var(--mute)}
+.tickf+.paybtn{margin-top:8px}
+.paybtn{width:100%;min-height:56px;display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px;padding:10px 12px;border:2px solid var(--text);border-radius:6px;color:var(--text);font-family:var(--font);text-align:left}
+.paybtn span:first-child{font-size:16px;font-weight:800}
+.paybtn span+span{font-size:18px;font-weight:900}
+.other{display:flex;align-items:flex-end;gap:8px;margin-bottom:8px}
+.other .fld{flex:1}
+.other .cardbtn{min-height:51px}
+.bondbox{display:flex;align-items:center;gap:12px;margin-bottom:8px;padding:10px 12px;border:1.5px solid var(--line);border-radius:6px}
+.bondbox>span{flex:1;min-width:0;font-size:14px;font-weight:600;line-height:1.35}
+.bondbox .cardbtn{padding:0 12px;font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{min-height:44px;padding:0 14px;border:1.5px solid var(--strong);border-radius:999px;background:var(--faint);color:var(--text);font:700 14px var(--font)}
+.chip[aria-pressed=true]{border:2px solid var(--text);background:var(--text);color:var(--ink)}
+.two{display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:10px;margin-top:14px}
+
+@media (min-width:1000px){
+  .head.h8{padding-bottom:0}
+  .titlerow:has(.segbox){gap:16px 24px;margin-bottom:0}
+  .segbox{padding:0;width:360px;max-width:100%}
+  .boxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:20px 0 0}
+  .boxes>div{padding:14px;border:1.5px solid var(--line);border-radius:6px}
+  .boxes>.strong{border-color:var(--text)}
+  .boxes .nl{font-size:13px;font-weight:800;color:var(--mute)}
+  .boxes .nv{font-size:28px;font-weight:900;letter-spacing:-.05em;line-height:1.1}
+  .boxes .ns{font-size:12px;color:var(--mute);line-height:1.3}
+  .bank{margin:12px 0 0}
+  .mcols{display:flex;flex-wrap:wrap;gap:8px 40px;align-items:flex-start}
+  .mleft{flex:999 1 480px;min-width:0}
+  .mright{flex:1 1 340px;min-width:0;margin:0 -20px}
+  .mh{padding:22px 0 0}
+  .msecs{padding:0}
+  .mcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:0 12px}
+}
+
+/* the smallest phones: keep the top bar inside the screen now that Refresh sits beside Add a booking */
+@media (max-width:340px){.bar .btn{padding:0 10px}.bar .r{gap:6px}}
