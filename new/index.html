@@ -471,10 +471,12 @@ function drawCal() {
   const P = phone(), [y, m] = S.ym, today = todayIso(), first = new Date(Date.UTC(y, m, 1)), lead = (first.getUTCDay() + 6) % 7;
   const days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(), cells = Math.ceil((lead + days) / 7) * 7, start = addDays(isoOf(y, m, 1), -lead);
   $("#mlabel").textContent = MONTHS[m] + " " + y;
+  const byDay = new Map();                       /* one pass over the items, instead of one per day cell */
+  S.items.forEach(i => { if (inMonth(i) && match(i)) byDay.set(i.date, (byDay.get(i.date) || []).concat(i)); });
   let h = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => "<div class=\"dow\" aria-hidden=\"true\">" + d + "</div>").join("");
   for (let c = 0; c < cells; c++) {
     const iso = addDays(start, c), p = dParts(iso), out = p.m !== m;
-    const its = out ? [] : S.items.filter(i => i.date === iso && match(i)), clash = !out && S.clash.has(iso), q = its.find(i => !i.booking);
+    const its = (!out && byDay.get(iso)) || [], clash = !out && S.clash.has(iso), q = its.find(i => !i.booking);
     const cls = (out ? " out" : "") + (iso === today ? " today" : "");
     if (P) {
       const inner = "<span class=\"num " + (its.length ? its[0].kind : "") + "\">" + p.d + "</span><span class=\"nm\">" + (its.length ? esc(its[0].short) + (its.length > 1 ? " +" + (its.length - 1) : "") : "") + "</span>";
