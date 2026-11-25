@@ -21,7 +21,7 @@ A new version of the wmhb app, all of it in one go:
 
 The app is for Aadil and Sara: it makes things easy to understand and log. The tracker (Google Sheet) holds all the details. The two are laid out the same way, with the same tabs in the same order.
 
-Aadil is a visual learner and is not a coder. Use plain words with him. Show him screenshots of the phone and laptop layouts as you go.
+Aadil is not a developer and likes to see things rather than read about them. Use plain words with him, and show him screenshots of the phone and laptop layouts as you go.
 
 ## What is already in the repo
 

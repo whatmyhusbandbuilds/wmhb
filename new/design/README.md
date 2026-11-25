@@ -61,11 +61,11 @@ This folder is everything Claude Code needs to build the new wmhb app. It was pu
 
 Not designed yet, so there is no picture: Partners and Settings (show the "coming next" box in `05-coming-next`), the Add a booking form, setting the Arrive and Start times on Event day, and laptop layouts for Event day, Designs, Videos and Prices. The handover says what to do for each.
 
-## What Aadil said about the look, in his words
+## What matters most about the look
 
-- "lets go with the dark theme, but can you add like a 3D texture for certain rectangles", then "looks perfect".
+- Dark theme, with a 3D texture on the cards. Aadil called this version perfect.
 - No background picture and no blur behind words.
-- "make sure all the spacing of each element is good".
-- Buttons should not be "very sharp" or "plain".
-- On the first wheel: "very sluggish and sometimes lags and gets stuck not exactly straight". The wheel in the kit is the fix. Don't swap it for the browser's own scrolling.
-- "Make sure you dont do anything else i didnt ask for".
+- Even spacing everywhere. He notices when it is off.
+- Rounded buttons with a material feel, never sharp or plain.
+- The wheel must feel light and always stop dead centre. The first version, built on the browser's own scrolling, felt sluggish and stopped crooked. The wheel in the kit is the fix, so don't swap it out.
+- Don't add anything that was not asked for.
