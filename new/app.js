@@ -90,11 +90,11 @@ const FIRST_DEPOSIT_UP_TO = 8;
 const DEPOSIT_ROUNDS_TO = 50;
 /* The four kinds of event, the same four as the calendar's filter, and the event types on the Settings tab that belong to each.
    This list is fixed (Aadil, 26 Nov 2026). It is not worked out from the wording: an event type that is not on it has no kind.
-   names = what a package's "For" column may call the kind. */
+   names = what a package's "For" column (Prices, column C) calls the kind. They are matched whole, as written in tracker v3. */
 const EVENT_KINDS = [
   { names: ["Weddings"], types: ["Wedding"] },
   { names: ["Birthdays & celebrations", "Celebrations"], types: ["Engagement party", "Birthday", "Anniversary", "Baby shower", "Other celebration"] },
-  { names: ["Corporate"], types: ["Brand / corporate"] },
+  { names: ["Corporate (30% deposit)", "Corporate"], types: ["Brand / corporate"] },
   { names: ["Markets & fairs", "Markets"], types: ["Expo / show", "Market / fair"] }
 ];
 const sameWords = (a, b) => { const tidy = v => txt(v).toLowerCase().replace(/\band\b/g, "&").replace(/\s+/g, " "); return tidy(a) === tidy(b); };
