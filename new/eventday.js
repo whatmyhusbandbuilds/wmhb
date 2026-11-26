@@ -37,7 +37,7 @@ const TICKS = {
   start: ["Start time set", "eventDay", "startSet"], power: ["Power sorted", "eventDay", "powerSorted"]
 };
 /* The words of the top three go where that thing is changed. */
-const GO_TO = { fee: "open Money to log a payment", bond: "open Money to log the bond", design: "open their designs" };
+const GO_TO = { fee: "log a payment", bond: "log the bond", design: "see the styles picked" };
 /** The seven things to have ready, in order, each ticked or not as Aadil left it. */
 function readyOf(x) {
   const b = x.b, f = x.f;
@@ -186,10 +186,11 @@ Object.assign(TAPS, {
       () => { const now = eventAt(row); return now ? packedOf(now) : []; },
       list => { const now = eventAt(row); if (now) { now.eventDay = now.eventDay || {}; now.eventDay.packedItems = list.join(", "); now.eventDay.packed = list.length === packingList().length ? "Yes" : ""; } });
   },
+  /* Event day stays on Event day: the payment sheet, or the styles picked, open on top of it, and closing them leaves the
+     same card open at the same place */
   "ev-go": el => {
     const row = +el.dataset.row;
-    if (el.dataset.key === "design") TAPS["dz-client"]({ dataset: { row: String(row) } });          /* that client, in Designs */
-    else { go("money"); openClient(row); }                                                           /* that client's payment sheet, on Money */
+    if (el.dataset.key === "design") openDesignPeek(row); else openClient(row);
   },
   "ev-set": el => openEventSet(+el.dataset.row, el.dataset.what),
   "ev-runner": el => { $("#ev-value").value = el.dataset.value; $$(".chip", dlg).forEach(c => c.setAttribute("aria-pressed", c === el)); },

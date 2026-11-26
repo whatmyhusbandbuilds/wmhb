@@ -57,7 +57,7 @@ SCREENS.designs = {
     if (S.dz.row && !dzClient()) this.reset();              /* the booking has gone from the tracker */
     const b = dzClient(); if (!b) return null;
     const opened = S.dz.page === "open";
-    return "<div class=\"head dzh\">" + barHtml() + "<div class=\"back\"><button class=\"k k-dark k-sm\" type=\"button\" data-do=\"dz-back\" data-fid=\"dz-back\">‹ " + (opened ? "All styles" : "All designs") + "</button></div>" +
+    return "<div class=\"head dzh\">" + barHtml() + "<div class=\"back\"><button class=\"k k-dark k-sm\" type=\"button\" data-do=\"dz-back\" data-fid=\"dz-back\">‹ " + (opened ? "All styles" : S.backTo && S.backTo.row === b.row ? "Event day" : "All designs") + "</button></div>" +
       "<h1 class=\"dzn\">" + esc(opened ? styleTitle(S.dz.open) : b.client) + "</h1><p class=\"dzs\" id=\"dz-sub\">" + dzSub(b) + "</p></div>" +
       "<div class=\"dzseg\"><div class=\"wm-track seg2\" role=\"group\" aria-label=\"Design for\"><span aria-hidden=\"true\" class=\"thumb\" id=\"dz-thumb\"" + (S.dz.side === "board" ? " data-at=\"board\"" : "") + "></span>" +
       ["screen", "board"].map(side => "<button type=\"button\" data-do=\"dz-side\" data-side=\"" + side + "\" data-fid=\"dz-" + side + "\" aria-pressed=\"" + (S.dz.side === side) + "\">" + (side === "screen" ? "Screen" : "Board") + "</button>").join("") + "</div></div>";
@@ -441,6 +441,25 @@ async function dzAddPhoto(row, file) {
   dzPhotosChanged(row);
 }
 
+/* ---------- the styles picked, on top of Event day ("Board design approved"), not designed: a plain sheet ---------- */
+function openDesignPeek(row) {
+  const b = eventAt(row); if (!b) return;
+  const art = dzArtOf(b), si = pickOf(b, "screen"), bi = pickOf(b, "board");
+  const part = (title, i, picture, none) => "<div><h3 class=\"sh first\">" + title + "</h3>" + (i >= 0 ? "<p class=\"pkname\">" + esc(styleTitle(i)) + "</p>" + picture : "<p class=\"none\">" + none + "</p>") + "</div>";
+  show("dzpeek", "<h2 id=\"dlg-title\" tabindex=\"-1\" class=\"tight\">" + esc(b.client) + "</h2><p class=\"sub\">" + eventLine({ b, f: moneyOf(b) }) + "</p>" +
+    (si < 0 && bi < 0 ? "<p class=\"none\">No styles picked yet.</p>"
+      : "<div class=\"dzpeek\">" + part("Screen style", si, si >= 0 ? screenHtml(art[si].screens.default, 150) : "", "No screen style picked yet.") +
+        part("Board style", bi, "<img class=\"pkboard\" alt=\"\" hidden>", "No board style picked yet.") + "</div>") +
+    "<button class=\"k k-dark wide mt16\" type=\"button\" data-do=\"dz-peek-open\" data-row=\"" + row + "\" data-fid=\"dz-peek-open\">Open in Designs</button>" +
+    "<button class=\"btn big done\" type=\"button\" data-do=\"close\">Done</button>");
+  if (bi < 0) return;
+  const photo = dzPhotoOf(b.row);
+  (photo ? asDataUrl(photo.blob).then(d => ({ [photo.url]: d })) : Promise.resolve({}))
+    .then(swaps => boardPicture(art[bi], "front", boardScreen(b), 120 * PIC_SCALE(), 200 * PIC_SCALE(), swaps, false))
+    .then(url => { const img = sheetKind === "dzpeek" && $(".pkboard", dlg); if (img) { img.onload = () => URL.revokeObjectURL(url); img.src = url; img.hidden = false; } else URL.revokeObjectURL(url); })
+    .catch(() => {});
+}
+
 /* ---------- theme colours (not designed: a plain sheet, like the Money sheets) ---------- */
 function openPalette() {
   const b = dzClient(); if (!b) return;
@@ -498,7 +517,18 @@ Object.assign(TAPS, {
   "dz-back": () => {
     if (S.dz.page === "open") { dzGo("styles", "back"); return; }
     const b = dzClient(); if (b && dzWaiting().some(id => id.split("|")[0] === String(b.row))) load();     /* one more try for anything that didn't save, after reading the tracker afresh (dzRetry) */
-    S.dz.row = 0; dzGo("list", "back");
+    const back = S.backTo && b && S.backTo.row === b.row ? S.backTo : null;
+    S.dz.row = 0;
+    if (back) {                                          /* came from Event day: back to the same card, at the same place */
+      S.backTo = null; S.dz.page = "list"; dzWheelOff(); go(back.tab); scrollTo(0, back.y);
+      const from = $("[data-fid=\"eg-design-" + back.row + "\"]"); if (from) from.focus({ preventScroll: true });
+      return;
+    }
+    dzGo("list", "back");
+  },
+  "dz-peek-open": el => {                                /* from Event day's sheet: that client in Designs, with "‹ Event day" to come back */
+    S.backTo = { tab: "eventday", row: +el.dataset.row, y: pageY() };
+    hide(); TAPS["dz-client"]({ dataset: { row: el.dataset.row } });
   },
   "dz-edit": () => dzGo("brief", "fwd"),
   "dz-side": el => {
