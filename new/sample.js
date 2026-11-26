@@ -114,11 +114,13 @@ function demoServer(fn, arg) {
   } else if (fn === "setEventDay" || fn === "setPacking") {
     const b = db.bookings.find(x => x.row === arg.row && x.id === arg.id); if (!b) throw told("The bookings have moved. Press Refresh and try again.");
     /* a sheet shows a saved time its own way, in capitals */
-    const shown = v => { if (!v) return ""; if (/^\d{1,2}:\d{2}\s?[AP]M$/i.test(v)) return v; const p = v.split(":").map(Number); return (p[0] % 12 || 12) + ":" + String(p[1]).padStart(2, "0") + (p[0] < 12 ? " AM" : " PM"); };
+    const shown = v => { if (!v) return ""; const p = v.split(":").map(Number); return (p[0] % 12 || 12) + ":" + String(p[1]).padStart(2, "0") + (p[0] < 12 ? " AM" : " PM"); };
     if (fn === "setPacking") { const items = PACKING.filter(i => arg.items.includes(i)); b.eventDay.packedItems = items.join(", "); b.eventDay.packed = items.length === PACKING.length ? "Yes" : ""; }
     else if (arg.field === "Sticker printed") b.designs.stickerPrinted = arg.value;
     else { const NAMES = { "Setup time": "setupTime", "Start time": "startTime", "Who is running it": "runningIt", "Venue confirmed": "venueConfirmed", "Power sorted": "powerSorted", "Fee paid in full": "feePaid", "Bond paid": "bondPaid", "Board design approved": "designApproved", "Start time set": "startSet" }, name = Object.prototype.hasOwnProperty.call(NAMES, arg.field) ? NAMES[arg.field] : "";     /* own names only, as has_() in Code.gs */
-      if (!name) throw told("\"" + arg.field + "\" is not a column this app may change."); b.eventDay[name] = /time$/.test(arg.field) ? shown(arg.value) : arg.value; }
+      if (!name) throw told("\"" + arg.field + "\" is not a column this app may change.");
+      if (/time$/.test(arg.field) && arg.value !== "" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(arg.value)) throw told(arg.field + " needs a time.");      /* as checkValue_ in Code.gs: "HH:MM" only */
+      b.eventDay[name] = /time$/.test(arg.field) ? shown(arg.value) : arg.value; }
     return new Promise(done => setTimeout(() => done({ saved: true }), 350));
   }
 

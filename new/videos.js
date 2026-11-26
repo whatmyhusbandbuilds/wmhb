@@ -30,5 +30,5 @@ function drawFolders(first) {
     return x.link
       ? "<a class=\"fold\" href=\"" + esc(x.link) + "\" target=\"_blank\" rel=\"noopener noreferrer\" data-fid=\"v-" + x.b.row + "\" aria-label=\"" + esc(x.b.client + (x.number ? ", " + x.number.toLowerCase() : "") + ". Open in Drive, in a new tab") + "\">" + inner + "<span class=\"fold-o\" aria-hidden=\"true\">Open in Drive ↗</span></a>"
       : "<div class=\"fold nofolder\">" + inner + "<span class=\"fold-o\">No folder yet</span></div>";
-  }).join("") || "<p class=\"empty\">No live bookings.</p>";            /* cancelled bookings get no tile */
+  }).join("") || "<p class=\"empty\">" + ((S.data.bookings || []).some(b => txt(b.client)) ? "No live bookings." : "No bookings yet.") + "</p>";      /* cancelled bookings get no tile */
 }

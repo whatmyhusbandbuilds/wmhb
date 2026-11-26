@@ -233,7 +233,7 @@ function go(tab) {
   S.tab = tab;
   const t = TABS.find(x => x.id === tab), screen = SCREENS[tab], title = t.label.toLowerCase();
   let body;
-  if (t.next || !screen) body = headHtml(title) + boxHtml("We design this screen next. It will have:", t.next || []) + (tab === "settings" && VERSION ? "<p class=\"ver\">Version " + VERSION + "</p>" : "");
+  if (t.next || !screen) body = headHtml(title) + (t.next ? boxHtml("We design this screen next. It will have:", t.next) : "") + (tab === "settings" && VERSION ? "<p class=\"ver\">Version " + VERSION + "</p>" : "");
   else if (!S.data) body = headHtml(title, screen.right) + (S.trouble ? troubleHtml() : "<p class=\"wait wm-card\" role=\"status\"><span>Loading your bookings…</span></p>");
   else body = (screen.top && screen.top() || headHtml(title, screen.right, !phone() && screen.side ? screen.side() : null, screen.head)) + troubleHtml() + screen.html() + footHtml();
   /* a screen with no laptop design keeps the phone layout, in a centred column */
@@ -444,7 +444,7 @@ function reloadSoon() {
   location.replace(location.pathname + (search ? search + "&" : "?") + "fresh=" + newer + location.hash);
 }
 dlg.addEventListener("close", () => setTimeout(reloadSoon, 0));
-addEventListener("online", () => { if (typeof dzRetry === "function") dzRetry(); });        /* back online: brief words that didn't save are tried again */
+addEventListener("online", () => { if (typeof dzWaiting === "function" && S.data && dzWaiting().length) load(); });    /* back online: read the tracker afresh, which tries brief words that didn't save again (designs.js) */
 document.addEventListener("focusout", () => setTimeout(reloadSoon, 400));
 /* Phone: the pinned top bar gets its hairline once the page has scrolled under it (app.css). */
 const markScrolled = () => document.documentElement.classList.toggle("scrolled", scrollY > 0);
