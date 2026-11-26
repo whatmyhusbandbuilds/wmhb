@@ -32,7 +32,6 @@ const M_SCREEN = {
   front: [1.00625, -7.4283635e-12, 0, 1.6853822e-14, 2.3846637e-11, 1.0083333, 0, -1.1664955e-13, 0, 0, 1, 0, 578, 826, 0, 1],
   angle: [0.93127765, 0.074073562, 0, 6.9137168e-05, -3.496263e-11, 0.98333333, 0, -9.8250757e-14, 0, 0, 1, 0, 608, 859, 0, 1]
 };
-const css3d = m => "matrix3d(" + m.join(",") + ")";
 const zoneBox = which => { const z = STICKERS[which]; return { x: STICKER_X - z.w * MM / 2, y: z.y, w: z.w * MM, h: z.h * MM }; };
 const mmWords = which => STICKERS[which].w + " × " + STICKERS[which].h + " mm";
 
@@ -224,35 +223,35 @@ function screenHtml(piece, w) {
   return piece.image ? "<div aria-hidden=\"true\" class=\"scr\" style=\"" + size + "background:url(" + piece.image + ") center/cover\"></div>"
     : "<div aria-hidden=\"true\" class=\"scr\" style=\"" + size + "background:" + piece.bg + ";font-size:" + (w / 100).toFixed(2) + "px\">" + piece.html + "</div>";
 }
-const zoneHtml = (which, inner) => { const z = zoneBox(which); return "<div class=\"zone\" style=\"left:" + z.x + "px;width:" + z.w + "px;top:" + z.y + "px;height:" + z.h + "px;" + zoneCss(which) + "\">" + inner + "</div>"; };
-const limitHtml = which => { const z = zoneBox(which); return "<div class=\"limit\" style=\"left:" + z.x + "px;width:" + z.w + "px;top:" + z.y + "px;height:" + z.h + "px\"><span>max " + mmWords(which) + "</span></div>"; };
-/**
- * One view of the board, w px wide: the photo, the ticked screen style on its screen, and the two stickers.
- * view = "front" or "angle". screen = the screen to show on the board, or null to leave the photo's own.
- * big = the opened board: its print picks up the board's shading, and it can show the size limits.
- */
-function boardView(art, view, w, screen, big) {
-  const k = "scale(" + (w / PLANE[0]).toFixed(5) + ")";
-  return "<div class=\"bview bd-" + (view === "front" ? "f" : "a") + "\" data-view=\"" + view + "\" style=\"width:" + w + "px;height:" + Math.round(w * 5 / 3) + "px\">" +
-    (screen ? "<div class=\"plane\" style=\"transform:" + k + "\"><div class=\"onboard\" style=\"transform:" + css3d(M_SCREEN[view]) + "\">" + screenHtml(screen, 640) + "</div></div>" : "") +
-    "<div class=\"plane" + (big ? " print" : "") + "\" style=\"transform:" + k + (view === "angle" ? " " + css3d(M_ANGLE) : "") + "\">" + zoneHtml("top", art.top) + zoneHtml("bottom", art.bottom) + (big ? limitHtml("top") + limitHtml("bottom") : "") + "</div></div>";
-}
+/* A board is never laid out live on the page. Seen at an angle it needs 3D, and an iPhone holds every 3D layer at its full,
+   unscaled size: six boards on the wheel, each a 1800 x 3000 px plane, were far more than a phone allows a page, and it
+   closed the page. So every board on the page is a flat picture, drawn once at the size it shows (boardPicture below). */
 
 /* ---------- PNG files, made in the browser ---------- */
 const FONT_SHEET = "https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800;900&display=swap";
 const asDataUrl = blob => new Promise((yes, no) => { const r = new FileReader(); r.onload = () => yes(r.result); r.onerror = () => no(r.error); r.readAsDataURL(blob); });
 let fontRules = null;
-/** The app's font, carried inside each picture: a picture drawn from HTML can't reach out for it. Fetched once. */
+/**
+ * The app's font, carried inside each picture: a picture drawn from HTML can't reach out for it. Fetched once.
+ * The font is one file for every weight, so each set of letters is carried once, for weights 500 to 900. Only the
+ * basic set goes into every picture; the extra letters (such as ā in a Māori name) only when the wording has them.
+ * Carrying the whole sheet into every picture made each one almost 1 MB, and a phone kept them.
+ */
 function fontCss() {
   if (!fontRules) fontRules = (async () => {
-    const sheet = await (await fetch(FONT_SHEET)).text(), rules = [], files = {};
-    sheet.replace(/\/\*\s*([\w-]+)\s*\*\/\s*(@font-face\s*\{[^}]*\})/g, (all, set, rule) => { if (set === "latin" || set === "latin-ext") rules.push(rule); return all; });
-    if (!rules.length) throw new Error("");
-    for (const rule of rules) { const url = /url\((https:[^)]+)\)/.exec(rule)[1]; if (!files[url]) files[url] = await asDataUrl(await (await fetch(url)).blob()); }
-    return rules.map(rule => rule.replace(/url\((https:[^)]+)\)/, (all, url) => "url(" + files[url] + ")")).join("\n");
+    const sheet = await (await fetch(FONT_SHEET)).text(), out = {};
+    for (const set of ["latin", "latin-ext"]) {
+      const m = new RegExp("/\\*\\s*" + set + "\\s*\\*/\\s*@font-face\\s*\\{([^}]*)\\}").exec(sheet); if (!m) continue;
+      const url = /url\((https:[^)]+)\)/.exec(m[1]), range = /unicode-range:\s*([^;]+);/.exec(m[1]); if (!url) continue;
+      out[set] = "@font-face{font-family:'Inter Tight';font-style:normal;font-weight:500 900;src:url(" + await asDataUrl(await (await fetch(url[1])).blob()) + ") format('woff2');" + (range ? "unicode-range:" + range[1] + ";" : "") + "}";
+    }
+    if (!out.latin) throw new Error("");
+    return out;
   })().catch(x => { fontRules = null; throw x; });
   return fontRules;
 }
+/** The font a piece of HTML needs inside its picture. */
+const fontFor = async html => { const f = await fontCss(); return f.latin + (f["latin-ext"] && /[\u0100-\u024F\u1E00-\u1EFF]/.test(html) ? f["latin-ext"] : ""); };
 const loadImage = src => new Promise((yes, no) => { const img = new Image(); img.onload = () => yes(img); img.onerror = () => no(new Error("")); img.src = src; });
 const canvasOf = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; };
 const pngOf = canvas => new Promise((yes, no) => canvas.toBlob(blob => blob ? yes(blob) : no(new Error("")), "image/png"));
@@ -263,7 +262,7 @@ const pngOf = canvas => new Promise((yes, no) => canvas.toBlob(blob => blob ? ye
 async function shot(html, w, h, outW, outH, swaps) {
   const box = document.createElement("div");
   box.setAttribute("style", "position:relative;width:" + w + "px;height:" + h + "px;overflow:hidden;font-family:'Inter Tight',system-ui,sans-serif;font-weight:500;line-height:normal");
-  let inner = "<style>*{box-sizing:border-box}" + await fontCss() + "</style>" + html;        /* the page's own sizing rule, so a piece measures the same in the file as on the page */
+  let inner = "<style>*{box-sizing:border-box}" + await fontFor(html) + "</style>" + html;        /* the page's own sizing rule, so a piece measures the same in the file as on the page */
   for (const from of Object.keys(swaps || {})) inner = inner.split(from).join(swaps[from]);
   box.innerHTML = inner;
   const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" + outW + "\" height=\"" + outH + "\" viewBox=\"0 0 " + w + " " + h + "\"><foreignObject x=\"0\" y=\"0\" width=\"" + w + "\" height=\"" + h + "\">" + new XMLSerializer().serializeToString(box) + "</foreignObject></svg>";
@@ -274,6 +273,7 @@ async function shot(html, w, h, outW, outH, swaps) {
     const img = await loadImage(src); if (img.decode) await img.decode().catch(() => {});
     if (n) await new Promise(done => setTimeout(done, 120));
     ctx.clearRect(0, 0, outW, outH); ctx.drawImage(img, 0, 0, outW, outH);
+    img.src = "";                                      /* lets the phone drop the decoded picture straight away */
   }
   return canvas;
 }
@@ -312,21 +312,53 @@ async function stickerPng(art, which, swaps) {
   const z = zoneBox(which), px = mm => Math.round(mm / 25.4 * PRINT_DPI);
   return pngOf(await shot("<div style=\"position:absolute;inset:0;overflow:hidden;" + zoneCss(which) + "\">" + art[which] + "</div>", z.w, z.h, px(STICKERS[which].w), px(STICKERS[which].h), swaps));
 }
+const freeCanvas = c => { if (c) { c.width = 0; c.height = 0; } };          /* gives a canvas's memory back straight away (phones keep it otherwise) */
+const boardPhotos = {};
+const boardPhoto = view => boardPhotos[view] || (boardPhotos[view] = loadImage("assets/board-" + view + ".jpg").catch(x => { delete boardPhotos[view]; throw x; }));
+/** One sticker drawn flat, at about the resolution it is needed at. */
+const stickerFlat = (art, which, k, swaps) => { const z = zoneBox(which); return shot("<div style=\"position:absolute;inset:0;overflow:hidden;" + zoneCss(which) + "\">" + art[which] + "</div>", z.w, z.h, Math.ceil(z.w * k), Math.ceil(z.h * k), swaps); };
+/** Where a point of a sticker's zone lands on a picture of the board, k = the picture's px per plane px. */
+const onPlane = (view, which, k) => { const z = zoneBox(which); return (x, y) => (view === "angle" ? through(M_ANGLE, z.x + x, z.y + y) : [z.x + x, z.y + y]).map(v => v * k); };
+/**
+ * One view of the board as a flat picture, outW x outH px: the photo, the ticked screen style on its screen, and the stickers.
+ * print = the stickers pick up the board's shading (the opened board and the download). The small boards on the wheel don't (design).
+ */
+async function boardCanvas(art, view, screen, outW, outH, swaps, print) {
+  const k = outW / PLANE[0], fine = Math.min(2, k * 1.6), canvas = canvasOf(outW, outH), ctx = canvas.getContext("2d");
+  ctx.drawImage(await boardPhoto(view), 0, 0, outW, outH);
+  if (screen && !screen.image) {
+    const sw = Math.max(96, Math.ceil(640 * fine)), flat = await shot("<div style=\"position:absolute;inset:0;overflow:hidden;line-height:1.1;background:" + screen.bg + ";font-size:6.4px\">" + screen.html + "</div>", 640, 360, sw, Math.ceil(sw * 9 / 16), swaps);
+    warp(ctx, flat, 640, 360, (x, y) => through(M_SCREEN[view], x, y).map(v => v * k)); freeCanvas(flat);
+  }
+  const ink = canvasOf(outW, outH), ictx = ink.getContext("2d");
+  for (const which of ["top", "bottom"]) {
+    const z = zoneBox(which), flat = await stickerFlat(art, which, fine, swaps);
+    warp(ictx, flat, z.w, z.h, onPlane(view, which, k)); freeCanvas(flat);
+  }
+  if (print) ctx.globalCompositeOperation = "multiply";
+  ctx.drawImage(ink, 0, 0); ctx.globalCompositeOperation = "source-over"; freeCanvas(ink);
+  return canvas;
+}
+/** The two sticker limits on one view of the board, on a see-through picture, for "Show size limits". */
+async function limitsCanvas(view, outW, outH) {
+  const k = outW / PLANE[0], fine = Math.min(2, k * 1.6), canvas = canvasOf(outW, outH), ctx = canvas.getContext("2d");
+  for (const which of ["top", "bottom"]) {
+    const z = zoneBox(which), flat = await shot("<div style=\"position:absolute;inset:0;border:5px dashed #C8452F\"><span style=\"position:absolute;left:8px;top:6px;padding:2px 8px;background:#C8452F;color:#fffdf8;font:800 26px 'Inter Tight',sans-serif;white-space:nowrap\">max " + mmWords(which) + "</span></div>", z.w, z.h, Math.ceil(z.w * fine), Math.ceil(z.h * fine));
+    warp(ctx, flat, z.w, z.h, onPlane(view, which, k)); freeCanvas(flat);
+  }
+  return canvas;
+}
+/** A picture for the page, as an address it can show. Boards are JPG (nothing see-through), limits PNG. */
+async function pictureUrl(canvas, type) {
+  try { return URL.createObjectURL(await new Promise((yes, no) => canvas.toBlob(blob => blob ? yes(blob) : no(new Error("")), type, 0.9))); }
+  finally { freeCanvas(canvas); }
+}
+const boardPicture = (art, view, screen, w, h, swaps, print) => boardCanvas(art, view, screen, w, h, swaps, print).then(c => pictureUrl(c, "image/jpeg"));
+const limitsPicture = (view, w, h) => limitsCanvas(view, w, h).then(c => pictureUrl(c, "image/png"));
 /** The board as a PNG, the size of the board photo: the photo, the screen on it, and the stickers printed onto it. */
 async function boardPng(art, view, screen, swaps) {
-  const W = BOARD_PX[0], H = BOARD_PX[1], k = W / PLANE[0], canvas = canvasOf(W, H), ctx = canvas.getContext("2d");
-  ctx.drawImage(await loadImage("assets/board-" + view + ".jpg"), 0, 0, W, H);
-  if (screen && !screen.image) {
-    const flat = await shot("<div style=\"position:absolute;inset:0;overflow:hidden;line-height:1.1;background:" + screen.bg + ";font-size:6.4px\">" + screen.html + "</div>", 640, 360, 1280, 720, swaps);
-    warp(ctx, flat, 640, 360, (x, y) => through(M_SCREEN[view], x, y).map(v => v * k));
-  }
-  const print = canvasOf(W, H), pctx = print.getContext("2d");
-  for (const which of ["top", "bottom"]) {
-    const z = zoneBox(which), flat = await shot("<div style=\"position:absolute;inset:0;overflow:hidden;" + zoneCss(which) + "\">" + art[which] + "</div>", z.w, z.h, z.w * 2, z.h * 2, swaps);
-    warp(pctx, flat, z.w, z.h, (x, y) => (view === "angle" ? through(M_ANGLE, z.x + x, z.y + y) : [z.x + x, z.y + y]).map(v => v * k));
-  }
-  ctx.globalCompositeOperation = "multiply"; ctx.drawImage(print, 0, 0); ctx.globalCompositeOperation = "source-over";
-  return pngOf(canvas);
+  const canvas = await boardCanvas(art, view, screen, BOARD_PX[0], BOARD_PX[1], swaps, true);
+  try { return await pngOf(canvas); } finally { freeCanvas(canvas); }
 }
 /**
  * Hands finished files to the person. On a phone the share sheet opens, with "Save image" in it. On a laptop they download.
