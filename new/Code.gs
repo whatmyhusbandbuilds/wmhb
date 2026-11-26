@@ -62,7 +62,7 @@ const HEADINGS = {
   'Payments': ['Date', 'Invoice no.', 'Client', 'Amount', 'What', 'Paid by or a note'],
   'Expenses': ['Date', 'What', 'Type', 'Amount', 'Invoice no.', 'Client', 'Notes'],
   'Event day': ['Booking ID', 'Hours', 'Power point', 'Setup time', 'Start time', 'Who is running it', 'Venue confirmed', 'Power sorted',
-    'Packed', 'Packed items', 'Day notes'],
+    'Packed', 'Packed items', 'Day notes', 'Fee paid in full', 'Bond paid', 'Board design approved', 'Start time set'],
   'Videos': ['Booking ID', 'Guest messages', 'Videos sent', 'Drive folder link', 'Link ends', 'Clips OK to share', 'OK to send offers', 'Review'],
   'Designs': ['Booking ID', 'Custom board?', 'Board design', 'Screen design', 'Canva link', 'Sticker printed', 'Names or title', 'Second line',
     'Default screen wording', 'Thank you wording', 'Theme colours', 'Brief notes', 'Photos link', 'Styles made on']
@@ -82,7 +82,11 @@ const MONEY_FIELDS = {
 };
 const PAYMENT_FIELDS = { 'Date': 'date', 'Invoice no.': 'text', 'Amount': 'num', 'What': 'list:Payment type', 'Paid by or a note': 'text' };
 const EXPENSE_FIELDS = { 'Date': 'date', 'What': 'text', 'Type': 'list:Expense type', 'Amount': 'num', 'Invoice no.': 'text', 'Notes': 'text' };
-const EVENT_FIELDS = { 'Setup time': 'time', 'Start time': 'time', 'Who is running it': 'text', 'Venue confirmed': 'yes', 'Power sorted': 'yes' };
+/* Aadil ticks every Event day item himself (26 Nov 2026): the app ticks none of them by itself. */
+const EVENT_FIELDS = {
+  'Setup time': 'time', 'Start time': 'time', 'Who is running it': 'text', 'Venue confirmed': 'yes', 'Power sorted': 'yes',
+  'Fee paid in full': 'yes', 'Bond paid': 'yes', 'Board design approved': 'yes', 'Start time set': 'yes'
+};
 const DESIGN_TICKS = { 'Sticker printed': 'yes' };      // ticked on the Event day screen, kept on the Designs tab
 /* The brief, as the app names each part, and the Designs column it is kept in. */
 const BRIEF_FIELDS = {
@@ -430,6 +434,10 @@ function readBookings_(day, problems) {
         runningIt: text(eventDay.cell(i, 'Who is running it')),
         venueConfirmed: text(eventDay.cell(i, 'Venue confirmed')),
         powerSorted: text(eventDay.cell(i, 'Power sorted')),
+        feePaid: text(eventDay.cell(i, 'Fee paid in full')),
+        bondPaid: text(eventDay.cell(i, 'Bond paid')),
+        designApproved: text(eventDay.cell(i, 'Board design approved')),
+        startSet: text(eventDay.cell(i, 'Start time set')),
         packed: text(eventDay.cell(i, 'Packed')),
         packedItems: text(eventDay.cell(i, 'Packed items')),
         notes: text(eventDay.cell(i, 'Day notes'))
@@ -906,8 +914,9 @@ function addExpense_(arg) {
 
 /**
  * arg = {row, id, field, value}. Saves one detail or tick for a booking.
- * field is Setup time, Start time (value "16:30"), Who is running it, Venue confirmed, Power sorted
- * or Sticker printed (value "Yes"). An empty value clears it.
+ * field is Setup time, Start time (value "16:30"), Who is running it, or one of the ticks (value "Yes"):
+ * Fee paid in full, Bond paid, Board design approved, Venue confirmed, Start time set, Power sorted, and
+ * Sticker printed (kept on the Designs tab). An empty value clears it.
  */
 function setEventDay_(arg) {
   const row = bookingRow_(arg), field = String(arg.field || '');

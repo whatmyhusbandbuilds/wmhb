@@ -29,19 +29,22 @@ function daysAway(iso) {
   const n = Math.round((ms(iso) - ms(todayIso())) / DAY);
   return n === 0 ? "Today" : n === 1 ? "Tomorrow" : n < 0 ? fmt(iso) : "In " + n + " days";
 }
-/** The seven things to have ready. field = the tracker column a tap saves to. Rows without one tick by themselves,
-    and only those carry a small label saying where the tick comes from. */
+/* The seven ticks: Aadil ticks and unticks every one himself (26 Nov 2026), and the app ticks none by itself.
+   Each is [the tracker column it is kept in, the tab's name in the app's data, the app's name for it]. */
+const TICKS = {
+  fee: ["Fee paid in full", "eventDay", "feePaid"], bond: ["Bond paid", "eventDay", "bondPaid"], design: ["Board design approved", "eventDay", "designApproved"],
+  sticker: ["Sticker printed", "designs", "stickerPrinted"], venue: ["Venue confirmed", "eventDay", "venueConfirmed"],
+  start: ["Start time set", "eventDay", "startSet"], power: ["Power sorted", "eventDay", "powerSorted"]
+};
+/* The words of the top three go where that thing is changed. */
+const GO_TO = { fee: "open Money to log a payment", bond: "open Money to log the bond", design: "open their designs" };
+/** The seven things to have ready, in order, each ticked or not as Aadil left it. */
 function readyOf(x) {
-  const b = x.b, f = x.f, e = b.eventDay || {}, d = b.designs || {};
-  return [
-    { key: "fee", label: "Fee paid in full", from: "from Money", done: f.total > 0 && f.owing <= 0 },
-    { key: "bond", label: "Bond paid", from: f.bond === "none" ? "No bond needed" : "from Money", done: f.bond !== "due" },
-    { key: "design", label: "Board design approved", from: "from Designs", done: !!txt(d.screen) && !!txt(d.board) },
-    { key: "sticker", label: "Sticker printed", from: "", done: isYes(d.stickerPrinted), field: "Sticker printed" },
-    { key: "venue", label: "Venue confirmed", from: "", done: isYes(e.venueConfirmed), field: "Venue confirmed" },
-    { key: "start", label: "Start time set", from: "", done: !!txt(e.startTime) },
-    { key: "power", label: "Power sorted", from: "", done: isYes(e.powerSorted), field: "Power sorted" }
-  ];
+  const b = x.b, f = x.f;
+  return Object.keys(TICKS).map(key => {
+    const t = TICKS[key];
+    return { key, label: t[0], from: key === "bond" && f.bond === "none" ? "No bond needed" : "", done: isYes((b[t[1]] || {})[t[2]]) };
+  });
 }
 /** The details list. set = one of the three rows that can be set here. A value of '' shows as "Not set yet". */
 function detailsOf(b) {
@@ -84,22 +87,28 @@ function eventCard(x) {
     "<span class=\"bars\" role=\"img\" aria-label=\"" + done + " of " + ready.length + " ready\">" + ready.map(r => "<i" + (r.done ? " class=\"on\"" : "") + "></i>").join("") + "</span><span class=\"cnt\">" + done + " of " + ready.length + " ready</span></button>" +
     "<div class=\"coll" + (open ? " open" : "") + "\" id=\"ev-" + row + "\"><div><div class=\"ebody\">" +
     "<div class=\"shead\"><h3>The details</h3></div><div class=\"drows\">" + detailRows(b) + "</div>" +
-    "<div class=\"shead\"><h3>Ready?</h3><span class=\"left\">" + leftToSort(ready.length - done) + "</span></div><div class=\"rrows\">" + ready.map(r => {
-      const inner = box(r.done) + "<span class=\"lab\">" + r.label + "</span>" + (r.from ? "<span class=\"from\">" + r.from + "</span>" : "");
-      return r.field ? "<button class=\"rrow" + (r.done ? " on" : "") + "\" type=\"button\" data-do=\"ev-tick\" data-key=\"" + r.key + "\" data-row=\"" + row + "\" data-fid=\"et-" + r.key + "-" + row + "\" aria-pressed=\"" + r.done + "\">" + inner + "</button>"
-        : "<div class=\"rrow" + (r.done ? " on" : "") + "\" data-key=\"" + r.key + "\">" + inner + "<span class=\"sr\">" + (r.done ? ", done" : ", not done yet") + "</span></div>";
-    }).join("") + "</div>" +
+    "<div class=\"shead\"><h3>Ready?</h3><span class=\"left\">" + leftToSort(ready.length - done) + "</span></div><div class=\"rrows\">" + ready.map(r => readyRow(r, row)).join("") + "</div>" +
     "<button class=\"phead\" type=\"button\" data-do=\"ev-pack\" data-row=\"" + row + "\" data-fid=\"ep-" + row + "\" aria-expanded=\"" + packOpen + "\"><span><span>Packing list</span><span class=\"pcnt\">" + packed.length + " of " + packingList().length + " packed</span></span><span class=\"plus sm\" aria-hidden=\"true\"><i></i><i class=\"v\"></i></span></button>" +
     "<div class=\"coll" + (packOpen ? " open" : "") + "\" id=\"ep-" + row + "\"><div><div class=\"prows\">" + packingList().map((item, n) =>
       "<button class=\"rrow" + (packed.includes(item) ? " on" : "") + "\" type=\"button\" data-do=\"ev-item\" data-item=\"" + n + "\" data-row=\"" + row + "\" data-fid=\"ei-" + n + "-" + row + "\" aria-pressed=\"" + packed.includes(item) + "\">" + box(packed.includes(item)) + "<span class=\"lab\">" + esc(item) + "</span></button>").join("") + "</div></div></div>" +
     "</div></div></div></div>";
 }
+/**
+ * One of the seven: red until it is ticked, then green, swept across from its box (as a tick on the Designs wheel).
+ * The top three: the box ticks it, and the words go where that thing is changed. The rest: the whole row ticks it.
+ */
+function readyRow(r, row) {
+  const at = " data-key=\"" + r.key + "\" data-row=\"" + row + "\"", from = r.from ? "<span class=\"from\">" + r.from + "</span>" : "", sweep = "<span class=\"rsweep\" aria-hidden=\"true\"></span>";
+  if (GO_TO[r.key]) return "<div class=\"rrow rbox" + (r.done ? " on" : "") + "\"" + at + ">" + sweep +
+    "<button class=\"rtick\" type=\"button\" data-do=\"ev-tick\"" + at + " data-fid=\"et-" + r.key + "-" + row + "\" aria-pressed=\"" + r.done + "\" aria-label=\"" + r.label + "\">" + box(r.done) + "</button>" +
+    "<button class=\"rgo\" type=\"button\" data-do=\"ev-go\"" + at + " data-fid=\"eg-" + r.key + "-" + row + "\" aria-label=\"" + r.label + ": " + GO_TO[r.key] + "\"><span class=\"lab\">" + r.label + "</span>" + from + "</button></div>";
+  return "<button class=\"rrow rbox" + (r.done ? " on" : "") + "\" type=\"button\" data-do=\"ev-tick\"" + at + " data-fid=\"et-" + r.key + "-" + row + "\" aria-pressed=\"" + r.done + "\">" + sweep + box(r.done) + "<span class=\"lab\">" + r.label + "</span>" + from + "</button>";
+}
 /** A tick row that is already on screen: turns it on or off in place, so only a new tick pops in. */
 function setRow(el, done) {
   if (el.classList.contains("on") === done) return;
   el.classList.toggle("on", done);
-  if (el.hasAttribute("aria-pressed")) el.setAttribute("aria-pressed", done);
-  const said = $(".sr", el); if (said) said.textContent = done ? ", done" : ", not done yet";
+  const tick = el.hasAttribute("aria-pressed") ? el : $("[aria-pressed]", el); if (tick) tick.setAttribute("aria-pressed", done);
   $(".box", el).innerHTML = done ? "<span class=\"ck\">" + CHECK + "</span>" : "";
 }
 function drawEvents() {
@@ -132,7 +141,6 @@ function setEventField(row, field, where, name, value, shown) {
     () => { const now = eventAt(row); return now ? txt((now[where] || {})[name]) : ""; },
     v => { const now = eventAt(row); if (now) { now[where] = now[where] || {}; now[where][name] = v; } });
 }
-const TICKS = { sticker: ["Sticker printed", "designs", "stickerPrinted"], venue: ["Venue confirmed", "eventDay", "venueConfirmed"], power: ["Power sorted", "eventDay", "powerSorted"] };
 
 /* ---------- the small sheets: arrive time, start time, who is running it (not designed yet: plain, like the Money sheets) ---------- */
 const SETS = {
@@ -177,6 +185,11 @@ Object.assign(TAPS, {
     saveLatest("pack" + row, "setPacking", { row, id: b.id, items }, items,
       () => { const now = eventAt(row); return now ? packedOf(now) : []; },
       list => { const now = eventAt(row); if (now) { now.eventDay = now.eventDay || {}; now.eventDay.packedItems = list.join(", "); now.eventDay.packed = list.length === packingList().length ? "Yes" : ""; } });
+  },
+  "ev-go": el => {
+    const row = +el.dataset.row;
+    if (el.dataset.key === "design") TAPS["dz-client"]({ dataset: { row: String(row) } });          /* that client, in Designs */
+    else { go("money"); openClient(row); }                                                           /* that client's payment sheet, on Money */
   },
   "ev-set": el => openEventSet(+el.dataset.row, el.dataset.what),
   "ev-runner": el => { $("#ev-value").value = el.dataset.value; $$(".chip", dlg).forEach(c => c.setAttribute("aria-pressed", c === el)); },

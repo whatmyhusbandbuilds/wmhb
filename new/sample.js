@@ -9,7 +9,7 @@ function demoServer(fn, arg) {
   const told = msg => { const x = new Error(msg); x.told = true; return x; };
   if (!demoDb) {
     const far = dParts(at(62));
-    const day = { hours: "3", powerPoint: "Yes", setupTime: "", startTime: "", runningIt: "", venueConfirmed: "", powerSorted: "", packed: "", packedItems: "", notes: "" };
+    const day = { hours: "3", powerPoint: "Yes", setupTime: "", startTime: "", runningIt: "", venueConfirmed: "", powerSorted: "", feePaid: "", bondPaid: "", designApproved: "", startSet: "", packed: "", packedItems: "", notes: "" };
     const design = { customBoard: "", board: "", screen: "", canva: "", stickerPrinted: "", names: "", line2: "", defaultWording: "", thanksWording: "", colours: "", notes: "", photos: "", madeOn: "" };
     const bk = (row, inv, client, date, type, venue, pkg, price, more) => Object.assign({
       row, id: ref("B", row - 4), invoice: ref("INV", inv), client, date, type, venue, suburb: "", region: "Auckland", pkg, customPrice: price, cancelled: "", notes: "",
@@ -24,8 +24,8 @@ function demoServer(fn, arg) {
         bk(5, 1, "City Expo", at(-25), "Expo / show", "Showgrounds", "Market hire", 250),
         bk(6, 2, "Olivia", at(-10), "Birthday", "Golf Resort", "Celebration hire", 910),
         on(bk(7, 3, "Charlotte", at(17), "Birthday", "City Hotel", "Celebration hire", 1150, { email: "charlotte@example.com" }), { venueConfirmed: "Yes" }, { names: "Charlotte's 30th" }),
-        on(bk(8, 4, "Tane Rewi", at(11), "Birthday", "Community Hall", "Celebration hire", 910, { phone: "021 555 0101", suburb: "Henderson" }), { hours: "4", setupTime: "2:00 PM", runningIt: "Sara", venueConfirmed: "Yes" }, { screen: "Style 4: Arch", board: "Style 1: Classic" }),
-        on(bk(9, 5, "Ruby Carter", at(24), "Wedding", "Valley Estate", "Forever", 1270, { hostHours: 2, insta: "@sample.ruby" }), { hours: "6", setupTime: "2:30 PM", startTime: "4:00 PM", runningIt: "Aadil and Sara", venueConfirmed: "Yes", powerSorted: "Yes" },
+        on(bk(8, 4, "Tane Rewi", at(11), "Birthday", "Community Hall", "Celebration hire", 910, { phone: "021 555 0101", suburb: "Henderson" }), { hours: "4", setupTime: "2:00 PM", runningIt: "Sara", venueConfirmed: "Yes", feePaid: "Yes", bondPaid: "Yes", designApproved: "Yes" }, { screen: "Style 4: Arch", board: "Style 1: Classic" }),
+        on(bk(9, 5, "Ruby Carter", at(24), "Wedding", "Valley Estate", "Forever", 1270, { hostHours: 2, insta: "@sample.ruby" }), { hours: "6", setupTime: "2:30 PM", startTime: "4:00 PM", runningIt: "Aadil and Sara", venueConfirmed: "Yes", powerSorted: "Yes", feePaid: "Yes", startSet: "Yes" },
           { names: "Ruby & James", line2: long(at(24)), defaultWording: "Leave us a video message", thanksWording: "Thank you for your message", colours: "Sage, Cream, Gold", notes: "Garden wedding, soft and elegant. Loves the arch at the venue. No pink.", photos: "sample", madeOn: at(-2) }),
         on(bk(10, 6, "Hannah Reid", at(108), "Wedding", "Waikato", "Forever", 1305, { region: "Hamilton", phone: "021 555 0123" }), { hours: "6" }),
         on(bk(11, 7, "Mele", at(150), "Engagement party", "", "Celebration hire", 990, { noPowerPoint: "Yes", email: "mele@example.com" })),
@@ -117,7 +117,7 @@ function demoServer(fn, arg) {
     const shown = v => { if (!v) return ""; const p = v.split(":").map(Number); return (p[0] % 12 || 12) + ":" + String(p[1]).padStart(2, "0") + (p[0] < 12 ? " AM" : " PM"); };
     if (fn === "setPacking") { const items = PACKING.filter(i => arg.items.includes(i)); b.eventDay.packedItems = items.join(", "); b.eventDay.packed = items.length === PACKING.length ? "Yes" : ""; }
     else if (arg.field === "Sticker printed") b.designs.stickerPrinted = arg.value;
-    else { const name = { "Setup time": "setupTime", "Start time": "startTime", "Who is running it": "runningIt", "Venue confirmed": "venueConfirmed", "Power sorted": "powerSorted" }[arg.field]; if (!name) throw told("\"" + arg.field + "\" is not a column this app may change."); b.eventDay[name] = /time$/.test(arg.field) ? shown(arg.value) : arg.value; }
+    else { const name = { "Setup time": "setupTime", "Start time": "startTime", "Who is running it": "runningIt", "Venue confirmed": "venueConfirmed", "Power sorted": "powerSorted", "Fee paid in full": "feePaid", "Bond paid": "bondPaid", "Board design approved": "designApproved", "Start time set": "startSet" }[arg.field]; if (!name) throw told("\"" + arg.field + "\" is not a column this app may change."); b.eventDay[name] = /time$/.test(arg.field) ? shown(arg.value) : arg.value; }
     return new Promise(done => setTimeout(() => done({ saved: true }), 350));
   }
 

@@ -233,7 +233,7 @@ function go(tab) {
   S.tab = tab;
   const t = TABS.find(x => x.id === tab), screen = SCREENS[tab], title = t.label.toLowerCase();
   let body;
-  if (t.next) body = headHtml(title) + boxHtml("We design this screen next. It will have:", t.next);
+  if (t.next) body = headHtml(title) + boxHtml("We design this screen next. It will have:", t.next) + (tab === "settings" && VERSION ? "<p class=\"ver\">Version " + VERSION + "</p>" : "");
   else if (!screen) body = headHtml(title) + boxHtml("This screen is designed and not built yet.", ["It gets built in " + t.later + "."]);
   else if (!S.data) body = headHtml(title, screen.right) + (S.trouble ? troubleHtml() : "<p class=\"wait wm-card\" role=\"status\"><span>Loading your bookings…</span></p>");
   else body = (screen.top && screen.top() || headHtml(title, screen.right, !phone() && screen.side ? screen.side() : null, screen.head)) + troubleHtml() + screen.html() + footHtml();
@@ -333,6 +333,7 @@ async function save(fn, arg, change) {
 /** Once every save has come back, show what the tracker now says. */
 function settle() {
   if (saving) return;
+  setTimeout(reloadSoon, 0);
   const again = mixed, data = newest, asked = wanted;
   newest = null; mixed = false; wanted = false;
   if (again) load(asked); else if (data) apply(data);
@@ -401,6 +402,44 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 /* ---------- start ---------- */
 function start() {
   $$(".ruler").forEach(el => el.setAttribute("d", RULER));
+  if (/[?&]fresh=/.test(location.search)) { try { history.replaceState(null, "", location.pathname + withoutFresh(location.search) + location.hash); } catch (e) {} }
   go(S.tab);
   load();
+  checkVersion();
 }
+
+/* ---------- staying up to date ----------
+   A phone can keep an old copy of the app. Its version is the ?v= number index.html loads app.js with. When the app
+   opens or comes back to the front, it reads index.html afresh; if that names a newer version, the app reloads itself
+   once, at a fresh address so the old copy can't be used again. It waits while a sheet is open, while anything is
+   being typed or saved, and while part of a brief hasn't saved, so nothing typed is lost. */
+const VERSION = (/[?&]v=(\d+)/.exec((document.currentScript || {}).src || "") || [])[1] || "";
+let newer = "", checking = false;
+/** The page address's ?… part without the fresh=… marker the reload adds. */
+const withoutFresh = search => search.replace(/([?&])fresh=\d*(&|$)/, (all, before, after) => after ? before : "").replace(/^&/, "?");
+async function checkVersion() {
+  if (!VERSION || checking) return;
+  checking = true;
+  try {
+    const res = await fetch("index.html?check=" + Date.now(), { cache: "no-store" });
+    const m = res.ok ? /app\.js\?v=(\d+)/.exec(await res.text()) : null;
+    if (m && +m[1] > +VERSION) { newer = m[1]; reloadSoon(); }
+  } catch (x) { /* no internet: try again next time */ }
+  finally { checking = false; }
+}
+const busyTyping = () => {
+  const a = document.activeElement;
+  if (a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable)) return true;
+  return typeof dzUnsaved === "function" && S.data && S.tab === "designs" && S.dz && S.dz.page === "brief" && dzClient() && dzUnsaved(dzClient()).length > 0;
+};
+function reloadSoon() {
+  if (!newer || dlg.open || saving || busyTyping()) return;           /* tried again when the sheet closes, the typing stops or a save lands */
+  let tried = {}; try { tried = JSON.parse(sessionStorage.getItem("wmhb2.fresh") || "{}"); } catch (e) {}
+  if (tried[newer]) return;                                            /* once only for each version, so it can never go round in circles */
+  tried[newer] = 1; try { sessionStorage.setItem("wmhb2.fresh", JSON.stringify(tried)); } catch (e) {}
+  const search = withoutFresh(location.search);
+  location.replace(location.pathname + (search ? search + "&" : "?") + "fresh=" + newer + location.hash);
+}
+dlg.addEventListener("close", () => setTimeout(reloadSoon, 0));
+document.addEventListener("focusout", () => setTimeout(reloadSoon, 400));
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkVersion(); });
