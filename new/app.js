@@ -291,7 +291,7 @@ const why = x => x && x.told && x.message ? x.message.replace(/^Error:\s*/, "") 
 
 function apply(data) {
   S.data = data; S.readAt = data.readAt || Date.now(); S.trouble = ""; refresh();
-  if (typeof dzRetry === "function") setTimeout(dzRetry, 0);           /* fresh data: one more try for brief words that didn't save (designs.js) */
+  if (typeof dzFresh === "function") setTimeout(dzFresh, 0);           /* fresh data: the brief follows the tracker, and words that didn't save are tried again (designs.js) */
 }
 let busy = false;
 /** Reads everything from the tracker again. asked = someone pressed Refresh, so say when it is done. */
