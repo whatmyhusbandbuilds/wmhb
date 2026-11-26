@@ -620,13 +620,9 @@ h1.dzn{margin:16px 0 0;font-size:30px;letter-spacing:-.04em;line-height:1}
 .bview{position:absolute;left:0;top:0;background-size:100% 100%}
 .bd-a{background-image:url(assets/board-angle.jpg)}
 .bd-f{background-image:url(assets/board-front.jpg)}
-.plane{position:absolute;left:0;top:0;width:1800px;height:3000px;transform-origin:0 0}
-.plane.print{mix-blend-mode:multiply}
-.onboard{position:absolute;left:0;top:0;width:640px;height:360px;transform-origin:0 0}
-.zone{position:absolute;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.05;font-size:16px}
-.limit{position:absolute;box-sizing:border-box;border:5px dashed #C8452F;opacity:0;transition:opacity 200ms ease}
-.limit span{position:absolute;left:8px;top:6px;padding:2px 8px;background:#C8452F;color:#fffdf8;font:800 26px 'Inter Tight',sans-serif}
-.limits .limit{opacity:1}
+.bview img{position:absolute;left:0;top:0;width:100%;height:100%}
+.bview .lim{opacity:0;transition:opacity 200ms ease}
+.limits .lim{opacity:1}
 
 /* 4 and 5. one style, opened */
 .dzwrap{padding:16px 20px 0}
@@ -655,6 +651,47 @@ h1.dzn{margin:16px 0 0;font-size:30px;letter-spacing:-.04em;line-height:1}
   .dzh .back{margin-top:0}
 }
 @media (prefers-reduced-motion:reduce){
-  .sweep,.dtick .circle,.seg2 button,.obig .bview,.limit{transition:none!important}
+  .sweep,.dtick .circle,.seg2 button,.obig .bview,.lim{transition:none!important}
   .view.pg-fwd,.view.pg-back,#dz-body.tab-r,#dz-body.tab-l{animation-duration:1ms}
+}
+
+/* ======================================================================
+   Stage 5: Videos, and Prices and packages. Values from the design's reference pages.
+   ====================================================================== */
+/* kit, section 7: folder tiles and the price list (as it is) */
+.fold{position:relative;display:flex;flex-direction:column;min-height:112px;padding:16px;box-sizing:border-box;border-radius:4px 16px 16px 16px;text-decoration:none;color:#1d1b12;font-family:'Inter Tight',system-ui,sans-serif;
+background:url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iMTIwIj48ZmlsdGVyIGlkPSJuIj48ZmVUdXJidWxlbmNlIHR5cGU9ImZyYWN0YWxOb2lzZSIgYmFzZUZyZXF1ZW5jeT0iMC45IiBudW1PY3RhdmVzPSIyIiBzdGl0Y2hUaWxlcz0ic3RpdGNoIi8+PGZlQ29sb3JNYXRyaXggdmFsdWVzPSIwIDAgMCAwIDAgIDAgMCAwIDAgMCAgMCAwIDAgMCAwICAwIDAgMCAwLjEgMCIvPjwvZmlsdGVyPjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iMTIwIiBmaWx0ZXI9InVybCgjbikiLz48L3N2Zz4=),linear-gradient(180deg,#FBE08A 0,#F1C22D 42%,#D2A015 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.8),inset 0 -2px 0 rgba(110,76,0,.35),0 3px 0 #8A6809,0 14px 24px rgba(0,0,0,.5);
+transition:transform 130ms cubic-bezier(.23,1,.32,1);-webkit-tap-highlight-color:transparent}
+.fold::before{content:"";position:absolute;left:0;top:-13px;width:48%;height:14px;border-radius:10px 12px 0 0;background:linear-gradient(180deg,#E9BE3A,#D8A81C);box-shadow:inset 0 1px 0 rgba(255,255,255,.6)}
+.fold:active{transform:translateY(2px) scale(.985)}
+.fold::before{transition:transform 180ms cubic-bezier(.23,1,.32,1)}
+@media (hover:hover) and (pointer:fine){.fold:hover::before{transform:translateY(-3px)}}
+.fold-n{font-size:17px;font-weight:800;line-height:1.15;letter-spacing:-.01em}.fold-c{margin-top:4px;font-size:13px;font-weight:700;opacity:.72}.fold-o{margin-top:auto;padding-top:12px;font-size:12px;font-weight:800;opacity:.8}
+.pnum{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#F1C22D;color:#1d1b12;font-size:14px;font-weight:900;flex-shrink:0}
+
+/* Videos */
+.lede.vlede{padding:8px 20px 0}
+.vgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:30px 16px;padding:32px 20px 0}
+.fold-n,.fold-c{display:block;overflow-wrap:anywhere}
+.fold.nofolder{opacity:.6}
+.fold.nofolder:active{transform:none}
+
+/* Prices and packages */
+.pcard{padding:0;border:0;background:transparent;cursor:pointer}
+.pcpic{display:block;width:190px;height:238px;border-radius:14px;background-size:cover;box-shadow:0 14px 26px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.08)}
+.plist{display:flex;flex-direction:column;gap:12px;padding:0 20px}
+.k.prow2{display:flex;align-items:center;gap:12px;width:100%;text-align:left}
+.prow2 .pname{flex:1;min-width:0}
+.prow2 .pchev{font-size:20px}
+h1.pcn{margin:16px 0 0;font-size:28px;letter-spacing:-.04em;line-height:1.05}
+.pcbig{padding:16px 20px 0;animation:zoomIn 320ms cubic-bezier(.23,1,.32,1) 60ms backwards}
+.pcbig img{display:block;width:100%;height:auto;aspect-ratio:4/5;border-radius:14px;box-shadow:0 14px 26px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.08)}
+
+@media (min-width:1000px){
+  /* Videos and Prices have no laptop design: the phone layout, in the centred column */
+  .view.narrow .lede.vlede{padding:12px 0 0}
+  .view.narrow .vgrid,.view.narrow .plist,.view.narrow .pcbig{padding-left:0;padding-right:0}
+}
+@media (prefers-reduced-motion:reduce){
+  .fold,.fold::before{transition:none!important}
 }

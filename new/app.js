@@ -176,9 +176,9 @@ const TABS = [
   { id: "clients", label: "Clients" },
   { id: "money", label: "Money" },
   { id: "eventday", label: "Event day" },
-  { id: "videos", label: "Videos", later: "stage 5" },
+  { id: "videos", label: "Videos" },
   { id: "designs", label: "Designs" },
-  { id: "prices", label: "Prices and packages", group: "Business", later: "stage 5" },
+  { id: "prices", label: "Prices and packages", group: "Business" },
   { id: "partners", label: "Partners", group: "Business", next: ["Decor businesses that send you clients", "Who referred who, and the 10% fee owed"] },
   { id: "settings", label: "Settings", end: true, next: ["Aadil’s and Sara’s logins", "Email signature and templates"] }
 ];

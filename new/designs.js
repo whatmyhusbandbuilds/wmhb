@@ -85,7 +85,7 @@ function dzLive(b) {
   dzWheelOff();
   const el = $("#dz-wheel");
   if (el) { dzWheel = cfWheel("dz" + b.row + S.dz.side, STYLES.length, Math.max(0, pickOf(b, S.dz.side))); dzWheel.ref(el); }
-  if (S.dz.page === "open") dzSize();
+  if (S.dz.page === "open") dzSize(); else if (S.dz.side === "board") dzBoardPictures();
   if (S.dz.page === "brief") { drawColours(b); drawPhotos(b); }
 }
 
@@ -133,14 +133,14 @@ const TICK_MARK = "<span class=\"ck\"><svg viewBox=\"0 0 24 24\" width=\"16\" he
 /** The tick circle in the corner of a style. The green sweeps across its box when it is ticked. */
 const tickCircle = (i, on, label) => "<div class=\"sweep\" aria-hidden=\"true\"></div><button type=\"button\" class=\"dtick\" aria-label=\"Choose this one\"" + (label ? " aria-describedby=\"" + label + "\"" : "") + " aria-pressed=\"" + on + "\" data-do=\"dz-tick\" data-i=\"" + i + "\" data-fid=\"dz-tick-" + i + "\"><span class=\"circle\">" + (on ? TICK_MARK : "") + "</span></button>";
 function stylesHtml(b) {
-  const side = S.dz.side, art = dzArtOf(b), picked = pickOf(b, side), onBoard = side === "board" ? boardScreen(b) : null;
+  const side = S.dz.side, art = dzArtOf(b), picked = pickOf(b, side);
   const w = cfWheel("dz" + b.row + side, STYLES.length, Math.max(0, picked));
   return "<p class=\"dhint\">" + (side === "screen" ? "Swipe either way. Tap a style to open it, or tap its circle to choose it." : "Swipe either way. Each board's screen shows the screen style you ticked.") + "</p>" +
     "<div class=\"cf\" id=\"dz-wheel\">" + STYLES.map((s, i) => {
       const a = art[i], title = styleTitle(i);
       const picture = side === "screen"
         ? screenHtml(a.screens.default, 163) + "<span class=\"minis\"><span><span class=\"ml\">Video</span>" + screenHtml(a.screens.video, 77) + "</span><span><span class=\"ml\">Thank you</span>" + screenHtml(a.screens.thanks, 77) + "</span></span>"
-        : "<div aria-hidden=\"true\" class=\"bcrop\"><div class=\"bshift\">" + boardView(a, "angle", 214, onBoard, false) + "</div></div>";
+        : "<div aria-hidden=\"true\" class=\"bcrop\"><div class=\"bshift\"><div class=\"bview bd-a\" style=\"width:214px;height:357px\">" + boardImg(b, i, "angle", 214, false) + "</div></div></div>";
       return "<div class=\"wm-card wcard" + (picked === i ? " on" : "") + "\" data-cfi=\"" + i + "\" style=\"" + cfPaint(w, i) + "\">" + tickCircle(i, picked === i, "dz-wt-" + i) +
         "<button type=\"button\" class=\"wopen\" aria-label=\"Open " + esc(title) + "\" data-do=\"dz-open\" data-i=\"" + i + "\" data-fid=\"dz-open-" + i + "\"><span class=\"wt\" id=\"dz-wt-" + i + "\">" + esc(title) + "</span>" + picture + "</button>" +
         "<div class=\"wbtns\">" + (i === 0 ? "<button type=\"button\" class=\"k k-ivory k-xs\" data-do=\"dz-default\" data-fid=\"dz-default\">Use the default</button>" : "") +
@@ -169,7 +169,11 @@ function dzSize() {
   const w = Math.floor(card.getBoundingClientRect().width - 27), a = dzArtOf(b)[S.dz.open];      /* the box, less its 12 px padding and 1.5 px border each side */
   $$(".oscr", card).forEach(el => { el.innerHTML = screenHtml(a.screens[el.dataset.kind], w); });
   const board = $("#dz-board");
-  if (board) { board.style.width = w + "px"; board.style.height = Math.round(w * 5 / 3) + "px"; board.innerHTML = boardView(a, "front", w, boardScreen(b), true) + boardView(a, "angle", w, boardScreen(b), true); }
+  if (board) {
+    board.style.width = w + "px"; board.style.height = Math.round(w * 5 / 3) + "px";
+    board.innerHTML = ["front", "angle"].map(view => "<div class=\"bview bd-" + view.charAt(0) + "\" style=\"width:" + w + "px;height:" + Math.round(w * 5 / 3) + "px\">" + boardImg(b, S.dz.open, view, w, true) + limitsImg(view, w) + "</div>").join("");
+  }
+  dzBoardPictures();
 }
 let dzSizing = 0;
 addEventListener("resize", () => { clearTimeout(dzSizing); dzSizing = setTimeout(() => { if (S.tab === "designs" && S.dz.page === "open" && S.data) dzSize(); }, 150); });
@@ -179,6 +183,49 @@ function dzPictures() {
   const b = dzClient(); if (!b) return;
   if (S.dz.page === "open") dzSize();
   else if (S.dz.page === "styles" && $("#dz-body")) { dzWheelOff(); $("#dz-body").innerHTML = stylesHtml(b); dzLive(b); }
+}
+/* ---------- the boards, as flat pictures (see art.js: a live 3D board is too heavy for a phone) ---------- */
+const boardPics = new Map();           /* what each picture shows -> its address. Kept for the few boards in use, the oldest let go */
+const PIC_SCALE = () => Math.min(2, Math.max(1, Math.round(devicePixelRatio || 1)));
+/** What a board picture shows: the client's styles as drawn now, which style, which view, the ticked screen, and its size. */
+function boardKey(b, i, view, w, print) { const art = S.dzArt[b.row]; return JSON.stringify([b.row, art ? art.key : "", i, view, w, PIC_SCALE(), print, pickOf(b, "screen")]); }
+const limitsKey = (view, w) => JSON.stringify(["limits", view, w, PIC_SCALE(), STICKERS.top.h, STICKERS.bottom.h]);
+/** The picture of one board, if it is drawn already. Until then the board's photo shows on its own, behind. */
+function boardImg(b, i, view, w, print) {
+  const key = boardKey(b, i, view, w, print), url = boardPics.get(key);
+  return "<img class=\"bimg\" alt=\"\" data-pic=\"" + esc(key) + "\"" + (url ? " src=\"" + url + "\"" : " hidden") + ">";
+}
+function limitsImg(view, w) { const key = limitsKey(view, w), url = boardPics.get(key); return "<img class=\"lim\" alt=\"\" data-pic=\"" + esc(key) + "\"" + (url ? " src=\"" + url + "\"" : " hidden") + ">"; }
+function keepPic(key, url) {
+  boardPics.set(key, url);
+  while (boardPics.size > 16) { const old = boardPics.keys().next().value; URL.revokeObjectURL(boardPics.get(old)); boardPics.delete(old); }
+}
+let picRun = 0;
+/** Draws the board pictures the page is waiting for, one at a time: the one in the middle (or showing) first. */
+async function dzBoardPictures() {
+  const run = ++picRun, b = dzClient(); if (!b) return;
+  const wanted = $$("img[data-pic]:not([src])", $("#dz-body") || document).map(img => img.dataset.pic);
+  if (!wanted.length) return;
+  const art = dzArtOf(b), photo = dzPhotoOf(b.row);
+  let swaps = null;
+  const order = key => { const k = JSON.parse(key); if (k[0] === "limits") return 5; return S.dz.page === "open" ? (k[3] === S.dz.view ? 0 : 1) : (dzWheel ? Math.abs(((k[2] - Math.round(dzWheel.t)) % STYLES.length + STYLES.length + 2) % STYLES.length - 2) : 0); };
+  for (const key of [...new Set(wanted)].sort((x, y) => order(x) - order(y))) {
+    if (run !== picRun) return;                                          /* the page has moved on: a newer run takes over */
+    let url = boardPics.get(key);
+    if (!url) {
+      const k = JSON.parse(key);
+      try {
+        if (k[0] === "limits") url = await limitsPicture(k[1], k[2] * k[3], Math.round(k[2] * 5 / 3) * k[3]);
+        else {
+          if (!swaps) swaps = photo ? { [photo.url]: await asDataUrl(photo.blob) } : {};
+          const i = k[2], screen = k[7] > 0 ? art[k[7]].screens.default : null;
+          url = await boardPicture(art[i], k[3], screen, k[4] * k[5], Math.round(k[4] * 5 / 3) * k[5], swaps, k[6]);
+        }
+      } catch (x) { return; }                                           /* no internet for the font: the photo stays on its own, and it tries again next time */
+      keepPic(key, url);
+    }
+    $$("img[data-pic]").forEach(img => { if (img.dataset.pic === key && !img.getAttribute("src")) { img.src = url; img.hidden = false; } });
+  }
 }
 /** Brings the ticks up to date where they stand, so only a new tick pops in. */
 function dzTicks(b) {

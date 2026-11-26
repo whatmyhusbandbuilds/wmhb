@@ -63,6 +63,9 @@ function demoServer(fn, arg) {
       terms: [["Booking terms", ""], ["Smallest deposit that marks Booked", "$150"], ["Refundable bond", "$250"], ["Old 7-day terms up to invoice no.", "5"]],
       photos: {}, photoCount: 0
     };
+    /* made-up folder addresses for the Videos tab (no real Drive link is kept in the repo). Glow Studio has none of its own yet, so it opens the main folder. */
+    demoDb.bookings.forEach(b => { if (b.row !== 12) b.videos.folder = "https://example.com/sample-videos/" + b.invoice; });
+    demoDb.videosFolder = "https://example.com/sample-videos/all-clients";
     /* two stand-in "photos" for one client's brief, drawn here: no real photo is kept in the repo */
     demoDb.photos[9] = [["#8A9A7B", "#B8975A"], ["#B8975A", "#8A9A7B"]].map((pair, n) => {
       const c = document.createElement("canvas"); c.width = c.height = 480;
@@ -144,7 +147,7 @@ function demoServer(fn, arg) {
     payments: db.payments.map((p, i) => Object.assign({ row: 5 + i, client: who(p.invoice) }, p)),
     expenses: db.expenses.map((x, i) => Object.assign({ row: 5 + i, client: who(x.invoice) }, x)),
     reports: { income, expenses: spent, profit: income - spent, expected: bookings.reduce((s, b) => s + b.owing, 0), bondsHeld: held, bank: income - spent + held },
-    lists: db.lists, packages: db.packs.map(p => ({ name: p[0], price: p[2] === "" ? null : p[2] })), prices, packing: PACKING, videosFolder: "", problems: []
+    lists: db.lists, packages: db.packs.map(p => ({ name: p[0], price: p[2] === "" ? null : p[2] })), prices, packing: PACKING, videosFolder: db.videosFolder || "", problems: []
   };
   /* the real back end takes a moment, and so does this one, so the screens can be checked the way they will really feel */
   return new Promise(done => setTimeout(() => done({ id, row, invoice, data: copy(data) }), 350));
