@@ -2,9 +2,9 @@
 /* wmhb app: the frame. The side menu, the tabs, the sheets, and talking to the tracker.
    Each screen lives in its own file beside this one (clients.js and so on). */
 
-/* The /exec address of the new back end ("wmhb app 2") goes here once it is deployed.
-   While it is empty the page shows made-up sample data and saves nothing. */
-const API = "";
+/* The /exec address of the new back end, the Apps Script project "wmhb app 2". It is no use to anyone without the key.
+   If it is emptied, or the page address ends in ?demo, the page shows made-up sample data and saves nothing. */
+const API = "https://script.google.com/macros/s/AKfycbxCelu-LC38ofC3zWNnGrJfFM3VeH4injtC13eEpnJMNVqBjcvWzCToEE-aKsUI1wIe_w/exec";
 const DEMO = !API || /[?&]demo\b/.test(location.search);
 /* The key comes from the page address (#k=...) and is kept on this device only. It is never written in this file. */
 let KEY = (/[#&]k=([^&]+)/.exec(location.hash) || [])[1] || "";
