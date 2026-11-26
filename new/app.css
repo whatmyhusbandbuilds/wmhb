@@ -499,7 +499,8 @@ button.drow::after{content:"";position:absolute;left:0;right:0;top:-4px;bottom:-
 button.drow[data-what=arrive]::after{top:-7px;bottom:0}
 button.drow[data-what=start]::after{top:0;bottom:-7px}
 .nw{white-space:nowrap}
-.rrow{width:100%;min-height:48px;display:flex;align-items:center;gap:12px;padding:6px 0;border:0;border-bottom:1.5px solid var(--line);background:transparent;color:var(--text);font-family:var(--font);text-align:left}
+/* position:relative keeps a row's hidden screen-reader words inside its own card, so a closed card adds nothing to the page's height */
+.rrow{position:relative;width:100%;min-height:48px;display:flex;align-items:center;gap:12px;padding:6px 0;border:0;border-bottom:1.5px solid var(--line);background:transparent;color:var(--text);font-family:var(--font);text-align:left}
 .rrow .lab{flex:1;min-width:0;font-size:16px;font-weight:800}
 .rrow.on .lab{font-weight:600;color:var(--mute);text-decoration:line-through}
 .rrow .from{font-size:12px;font-weight:400;color:var(--mute);flex-shrink:0}
