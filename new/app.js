@@ -175,7 +175,7 @@ const ICON = {
 const TABS = [
   { id: "clients", label: "Clients" },
   { id: "money", label: "Money" },
-  { id: "eventday", label: "Event day", later: "stage 3" },
+  { id: "eventday", label: "Event day" },
   { id: "videos", label: "Videos", later: "stage 5" },
   { id: "designs", label: "Designs", later: "stage 4" },
   { id: "prices", label: "Prices and packages", group: "Business", later: "stage 5" },
@@ -233,7 +233,8 @@ function go(tab) {
   else if (!screen) body = headHtml(title) + boxHtml("This screen is designed and not built yet.", ["It gets built in " + t.later + "."]);
   else if (!S.data) body = headHtml(title, screen.right) + (S.trouble ? troubleHtml() : "<p class=\"wait wm-card\" role=\"status\"><span>Loading your bookings…</span></p>");
   else body = headHtml(title, screen.right, !phone() && screen.side ? screen.side() : null, screen.head) + troubleHtml() + screen.html() + footHtml();
-  $("#view").innerHTML = "<section class=\"view wm-scroll\" aria-label=\"" + esc(t.label) + "\">" + body + "</section>";
+  /* a screen with no laptop design keeps the phone layout, in a centred column */
+  $("#view").innerHTML = "<section class=\"view wm-scroll" + (screen && screen.narrow ? " narrow" : "") + "\" aria-label=\"" + esc(t.label) + "\">" + body + "</section>";
   if (screen && S.data && !t.next) screen.fill(true);
   drawMenu(); stamp(); scrollTo(0, 0);
 }
@@ -290,9 +291,12 @@ let busy = false;
 /** Reads everything from the tracker again. asked = someone pressed Refresh, so say when it is done. */
 async function load(asked) {
   if (!DEMO && !KEY) { S.trouble = "This device doesn’t have the key yet. Open the full private link you were sent, then add that page to your home screen."; go(S.tab); return; }
+  if (saving) { mixed = true; wanted = wanted || !!asked; return; }        /* a change is still saving: read the tracker once it has landed */
   if (busy) return; busy = true; $("#app").classList.add("reading");
   try {
-    apply((await server("getData")).data);
+    const data = (await server("getData")).data;
+    if (saving) { mixed = true; wanted = wanted || !!asked; return; }      /* something changed while this was being read, so it is already out of date */
+    apply(data);
     if (asked) toast(DEMO ? "Up to date." : "Up to date. Read from the tracker at " + clock(S.readAt) + ".");
   } catch (x) {
     if (S.data) toast("Couldn’t read the tracker. " + why(x));
@@ -306,10 +310,10 @@ async function load(asked) {
  * change(data) edits the app's copy. If the save fails the screen goes back and says so.
  * Gives back the back end's answer, or null if it didn't save.
  */
-let saving = 0, newest = null, mixed = false;
+let saving = 0, answers = 0, newest = null, mixed = false, wanted = false;
 async function save(fn, arg, change) {
   const before = copy(S.data);
-  change(S.data); saving++; refresh();
+  change(S.data); saving++; answers++; refresh();
   try {
     const res = await server(fn, arg);
     if (res && res.data) newest = res.data;
@@ -319,12 +323,39 @@ async function save(fn, arg, change) {
     say("That didn’t save. " + why(x));
     return null;
   } finally {
-    saving--;
-    if (!saving) {                       /* once every save has come back, show what the tracker now says */
-      if (mixed) load(); else if (newest) apply(newest);
-      newest = null; mixed = false;
-    }
+    saving--; answers--; settle();
   }
+}
+/** Once every save has come back, show what the tracker now says. */
+function settle() {
+  if (saving) return;
+  const again = mixed, data = newest, asked = wanted;
+  newest = null; mixed = false; wanted = false;
+  if (again) load(asked); else if (data) apply(data);
+}
+/**
+ * For things that are tapped quickly, such as ticks: the change shows at once and saves behind the scenes.
+ * Saves for the same thing go one at a time, and only the newest is sent, so a late answer can't undo a newer tap.
+ * value = what to show. get() reads what the screen shows now. set(value) shows a value.
+ * If a save fails the screen goes back to what was last saved, and says so.
+ */
+const lanes = {};
+async function saveLatest(key, fn, arg, value, get, set) {
+  const lane = lanes[key] || (lanes[key] = { busy: false, next: null, saved: undefined });
+  if (!lane.busy) lane.saved = get();
+  set(value); refresh();
+  if (lane.busy) { lane.next = { arg, value }; return; }
+  lane.busy = true; saving++;
+  let job = { arg, value }, failed = null;
+  while (job) {
+    lane.next = null;
+    try { await server(fn, job.arg); lane.saved = job.value; if (newest || answers) mixed = true; }      /* an answer read before this landed would undo it: read the tracker again instead */
+    catch (x) { failed = x; break; }
+    job = lane.next;
+  }
+  lane.busy = false; lane.next = null; saving--;
+  if (failed) { set(lane.saved); refresh(); say("That didn’t save. " + why(failed)); }
+  settle();
 }
 
 /* ---------- messages ---------- */

@@ -203,7 +203,7 @@ dialog::backdrop{background:rgba(28,27,21,.5);animation:wmFade 260ms ease both}
 .plus{position:relative;display:block;flex-shrink:0;width:28px;height:28px;border-radius:50%;border:1.5px solid var(--text)}
 .plus i{position:absolute;left:7px;right:7px;top:50%;height:2px;margin-top:-1px;border-radius:1px;background:var(--text)}
 .plus i.v{transform:rotate(90deg);transition:transform 300ms cubic-bezier(.32,.72,0,1)}
-[aria-expanded=true]>.plus i.v{transform:rotate(0deg)}
+[aria-expanded=true] .plus i.v{transform:rotate(0deg)}
 .coll{display:grid;grid-template-rows:0fr;transition:grid-template-rows 340ms cubic-bezier(.32,.72,0,1)}
 .coll>div{min-height:0;overflow:hidden;visibility:hidden;transition:visibility 0s linear 340ms}
 .coll>div>div{opacity:0;transition:opacity 260ms ease}
@@ -467,3 +467,58 @@ dialog h2.tight{margin:2px 0 2px}
 
 /* the smallest phones: keep the top bar inside the screen now that Refresh sits beside Add a booking */
 @media (max-width:340px){.bar .btn{padding:0 10px}.bar .r{gap:6px}}
+
+/* ======================================================================
+   Stage 3: Event day. Values from the design's Event day reference pages.
+   ====================================================================== */
+.lede{margin:0;padding:4px 20px 14px;font-size:15px;color:var(--mute);line-height:1.4}
+.ecards{padding:0 20px}
+.ecard{margin:0 0 12px;border:1.5px solid var(--line);border-radius:6px}
+.ehead{display:block;width:100%;min-height:64px;padding:14px;border:0;background:transparent;color:var(--text);font-family:var(--font);text-align:left}
+.ehead .top{display:flex;align-items:flex-start;gap:12px}
+.ehead .top>span:first-child{flex:1;min-width:0}
+.ehead .n{display:block;font-size:18px;font-weight:800;line-height:1.2}
+.ehead .s{display:block;font-size:13px;color:var(--mute)}
+.ehead .in{flex-shrink:0;text-align:right;font-size:14px;font-weight:800}
+.ehead .bars{display:flex;gap:3px;margin:12px 0 6px}
+.ehead .bars i{flex:1;height:10px;border:1.5px solid var(--text);border-radius:2px;background:var(--faint);transition:background 220ms ease}
+.ehead .bars i.on{background:var(--text)}
+.ehead .cnt{display:block;font-size:14px;font-weight:800}
+.ebody{padding:0 14px 14px;border-top:1.5px solid var(--line)}
+.shead{display:flex;justify-content:space-between;align-items:baseline;padding:16px 0 0}
+.shead h3{font-size:14px;font-weight:800;color:var(--mute)}
+.shead span{font-size:13px;font-weight:800}
+.drow{display:flex;gap:12px;width:100%;padding:8px 0;border:0;border-bottom:1.5px solid var(--line);background:transparent;color:var(--text);font:500 15px/1.35 var(--font);text-align:left}
+.drow .l{width:76px;flex-shrink:0;font-weight:700;color:var(--mute)}
+.drow .v{flex:1;min-width:0;font-weight:700}
+.drow .v.unset{font-weight:500;color:var(--mute)}
+/* the three rows that can be set here are buttons. They look like the other rows, and their tap area reaches 4 px above and below, to 44 px. */
+button.drow{position:relative}
+button.drow::after{content:"";position:absolute;left:0;right:0;top:-4px;bottom:-4px}
+/* Arrive and Start sit one above the other, so each reaches away from the other: no shared strip, and both are 44 px to tap */
+button.drow[data-what=arrive]::after{top:-7px;bottom:0}
+button.drow[data-what=start]::after{top:0;bottom:-7px}
+.nw{white-space:nowrap}
+.rrow{width:100%;min-height:48px;display:flex;align-items:center;gap:12px;padding:6px 0;border:0;border-bottom:1.5px solid var(--line);background:transparent;color:var(--text);font-family:var(--font);text-align:left}
+.rrow .lab{flex:1;min-width:0;font-size:16px;font-weight:800}
+.rrow.on .lab{font-weight:600;color:var(--mute);text-decoration:line-through}
+.rrow .from{font-size:12px;font-weight:400;color:var(--mute);flex-shrink:0}
+.rrow.on .box{background:var(--text)}
+.ck{display:inline-flex}
+.box .ck svg{opacity:1}
+.phead{width:100%;min-height:56px;display:flex;align-items:center;gap:12px;padding:10px 0 4px;border:0;background:transparent;color:var(--text);font-family:var(--font);text-align:left}
+.phead>span:first-child{flex:1;min-width:0}
+.phead>span:first-child span:first-child{display:block;font-size:16px;font-weight:800}
+.phead>span:first-child span+span{display:block;font-size:13px;font-weight:600;color:var(--mute)}
+.plus.sm{width:24px;height:24px}
+.plus.sm i{left:6px;right:6px}
+
+@media (min-width:1000px){
+  /* Event day has no laptop design: the phone layout, in a centred column no wider than 560 px */
+  .view.narrow{max-width:640px;margin-left:auto;margin-right:auto}
+  .view.narrow .lede{padding:12px 0 14px}
+  .view.narrow .ecards{padding:0}
+}
+@media (prefers-reduced-motion:reduce){
+  .ehead .bars i{transition:none}
+}

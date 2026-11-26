@@ -9,10 +9,13 @@ function demoServer(fn, arg) {
   const told = msg => { const x = new Error(msg); x.told = true; return x; };
   if (!demoDb) {
     const far = dParts(at(62));
+    const day = { hours: "3", powerPoint: "Yes", setupTime: "", startTime: "", runningIt: "", venueConfirmed: "", powerSorted: "", packed: "", packedItems: "", notes: "" };
+    const design = { customBoard: "", board: "", screen: "", canva: "", stickerPrinted: "", names: "", line2: "", defaultWording: "", thanksWording: "", colours: "", notes: "", photos: "", madeOn: "" };
     const bk = (row, inv, client, date, type, venue, pkg, price, more) => Object.assign({
       row, id: ref("B", row - 4), invoice: ref("INV", inv), client, date, type, venue, suburb: "", region: "Auckland", pkg, customPrice: price, cancelled: "", notes: "",
-      phone: "", email: "", insta: "", source: "", referredBy: "", eventDay: {}, videos: {}, designs: {}
+      phone: "", email: "", insta: "", source: "", referredBy: "", hostHours: 0, noPowerPoint: "", eventDay: Object.assign({}, day), videos: {}, designs: Object.assign({}, design)
     }, more || {});
+    const on = (b, eventDay, designs) => { Object.assign(b.eventDay, eventDay || {}); Object.assign(b.designs, designs || {}); return b; };
     const eq = (row, name, contact, type, date, message, status, what, bookingId) => ({ row, received: at(-row), name, contact, type, date, message, status, what: what || "", bookingId: bookingId || "" });
     const pay = (days, inv, amount, what) => ({ date: at(days), invoice: ref("INV", inv), amount, what, note: "" });
     const cost = (days, what, type, amount, inv) => ({ date: at(days), what, type, amount, invoice: inv ? ref("INV", inv) : "", notes: "" });
@@ -20,12 +23,12 @@ function demoServer(fn, arg) {
       bookings: [
         bk(5, 1, "City Expo", at(-25), "Expo / show", "Showgrounds", "Market hire", 250),
         bk(6, 2, "Olivia", at(-10), "Birthday", "Golf Resort", "Celebration hire", 910),
-        bk(7, 3, "Charlotte", at(17), "Birthday", "City Hotel", "Celebration hire", 1150, { email: "charlotte@example.com" }),
-        bk(8, 4, "Tane Rewi", at(11), "Birthday", "", "Celebration hire", 910, { phone: "021 555 0101" }),
-        bk(9, 5, "Ruby Carter", at(24), "Wedding", "Valley Estate", "Forever", 1270),
-        bk(10, 6, "Hannah Reid", at(108), "Wedding", "Waikato", "Forever", 1305, { region: "Hamilton" }),
-        bk(11, 7, "Mele", at(150), "Engagement party", "", "Celebration hire", 990),
-        bk(12, 8, "Glow Studio (Mia)", at(9), "Brand / corporate", "", "Corporate hire", 910, { phone: "09 555 0100" }),
+        on(bk(7, 3, "Charlotte", at(17), "Birthday", "City Hotel", "Celebration hire", 1150, { email: "charlotte@example.com" }), { venueConfirmed: "Yes" }),
+        on(bk(8, 4, "Tane Rewi", at(11), "Birthday", "Community Hall", "Celebration hire", 910, { phone: "021 555 0101", suburb: "Henderson" }), { hours: "4", setupTime: "2:00 PM", runningIt: "Sara", venueConfirmed: "Yes" }, { screen: "Style 4: Arch", board: "Style 1: Classic" }),
+        on(bk(9, 5, "Ruby Carter", at(24), "Wedding", "Valley Estate", "Forever", 1270, { hostHours: 2, insta: "@sample.ruby" }), { hours: "6", setupTime: "2:30 PM", startTime: "4:00 PM", runningIt: "Aadil and Sara", venueConfirmed: "Yes", powerSorted: "Yes" }),
+        on(bk(10, 6, "Hannah Reid", at(108), "Wedding", "Waikato", "Forever", 1305, { region: "Hamilton", phone: "021 555 0123" }), { hours: "6" }),
+        on(bk(11, 7, "Mele", at(150), "Engagement party", "", "Celebration hire", 990, { noPowerPoint: "Yes", email: "mele@example.com" })),
+        on(bk(12, 8, "Glow Studio (Mia)", at(9), "Brand / corporate", "To confirm, likely their studio", "Corporate hire", 910, { phone: "09 555 0100" }), { runningIt: "Aadil" }),
         bk(13, 9, "Kiri", at(20), "Birthday", "", "Celebration hire", 450, { cancelled: "Yes" })
       ],
       enquiries: [
@@ -59,13 +62,14 @@ function demoServer(fn, arg) {
       terms: [["Booking terms", ""], ["Smallest deposit that marks Booked", "$150"], ["Refundable bond", "$250"], ["Old 7-day terms up to invoice no.", "5"]]
     };
   }
+  const PACKING = ["Top board", "Bottom board", "Base", "Laptop and charger", "Camera", "Monitor", "Light", "Vintage phone", "Speaker", "Cable box", "10 m extension cord", "Table message cards"];
   const db = demoDb, of = (rows, inv, what) => rows.filter(p => p.invoice === inv && (!what || p.what === what)).reduce((s, p) => s + p.amount, 0);
   const next = list => Math.max(0, ...list) + 1;
 
   /* ---------- the calls ---------- */
   let id = "", invoice = "", row = 0;
-  const blank = { phone: "", email: "", insta: "", source: "", referredBy: "", suburb: "", region: "", pkg: "", customPrice: 0, cancelled: "", notes: "", eventDay: {}, videos: {}, designs: {} };
-  const book = fields => { row = next(db.bookings.map(b => b.row)); id = ref("B", row - 4); invoice = ref("INV", next(db.bookings.map(b => +b.invoice.slice(4)))); db.bookings.push(Object.assign({}, blank, { row, id, invoice }, fields)); };
+  const blank = { phone: "", email: "", insta: "", source: "", referredBy: "", suburb: "", region: "", pkg: "", customPrice: 0, cancelled: "", notes: "", hostHours: 0, noPowerPoint: "", eventDay: { hours: "3" }, videos: {}, designs: {} };
+  const book = fields => { row = next(db.bookings.map(b => b.row)); id = ref("B", row - 4); invoice = ref("INV", next(db.bookings.map(b => +b.invoice.slice(4)))); db.bookings.push(Object.assign({}, blank, { row, id, invoice, eventDay: { hours: "3" }, videos: {}, designs: {} }, fields)); };
   if (fn === "setEnquiryStatus") {
     const q = db.enquiries.find(x => x.row === arg.row && x.name === arg.name); if (!q) throw told("That enquiry is no longer there. Press Refresh.");
     q.status = arg.status; q.what = arg.status === "Cancelled" ? "Cancelled" : ""; q.bookingId = "";
@@ -80,6 +84,14 @@ function demoServer(fn, arg) {
     arg.payments.forEach(p => db.payments.push({ date: t, invoice: arg.invoice, amount: num(p.amount), what: p.what, note: p.note || "" }));
   } else if (fn === "addExpense") {
     db.expenses.push({ date: t, what: arg.what, type: arg.type, amount: num(arg.amount), invoice: arg.invoice || "", notes: arg.notes || "" });
+  } else if (fn === "setEventDay" || fn === "setPacking") {
+    const b = db.bookings.find(x => x.row === arg.row && x.id === arg.id); if (!b) throw told("The bookings have moved. Press Refresh and try again.");
+    /* a sheet shows a saved time its own way, in capitals */
+    const shown = v => { if (!v) return ""; const p = v.split(":").map(Number); return (p[0] % 12 || 12) + ":" + String(p[1]).padStart(2, "0") + (p[0] < 12 ? " AM" : " PM"); };
+    if (fn === "setPacking") { const items = PACKING.filter(i => arg.items.includes(i)); b.eventDay.packedItems = items.join(", "); b.eventDay.packed = items.length === PACKING.length ? "Yes" : ""; }
+    else if (arg.field === "Sticker printed") b.designs.stickerPrinted = arg.value;
+    else { const name = { "Setup time": "setupTime", "Start time": "startTime", "Who is running it": "runningIt", "Venue confirmed": "venueConfirmed", "Power sorted": "powerSorted" }[arg.field]; if (!name) throw told("\"" + arg.field + "\" is not a column this app may change."); b.eventDay[name] = /time$/.test(arg.field) ? shown(arg.value) : arg.value; }
+    return new Promise(done => setTimeout(() => done({ saved: true }), 350));
   }
 
   /* ---------- what the tracker's formulas would work out ---------- */
@@ -108,7 +120,7 @@ function demoServer(fn, arg) {
     payments: db.payments.map((p, i) => Object.assign({ row: 5 + i, client: who(p.invoice) }, p)),
     expenses: db.expenses.map((x, i) => Object.assign({ row: 5 + i, client: who(x.invoice) }, x)),
     reports: { income, expenses: spent, profit: income - spent, expected: bookings.reduce((s, b) => s + b.owing, 0), bondsHeld: held, bank: income - spent + held },
-    lists: db.lists, packages: db.packs.map(p => ({ name: p[0], price: p[2] === "" ? null : p[2] })), prices, packing: [], videosFolder: "", problems: []
+    lists: db.lists, packages: db.packs.map(p => ({ name: p[0], price: p[2] === "" ? null : p[2] })), prices, packing: PACKING, videosFolder: "", problems: []
   };
   /* the real back end takes a moment, and so does this one, so the screens can be checked the way they will really feel */
   return new Promise(done => setTimeout(() => done({ id, row, invoice, data: copy(data) }), 350));
