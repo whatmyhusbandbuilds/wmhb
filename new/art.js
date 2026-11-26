@@ -51,7 +51,8 @@ const PALETTE = [
   ["Forest", "#2F4A3A"], ["Dusty blue", "#8FA6B8"], ["Navy", "#1F2D4D"], ["Lilac", "#B9A7D1"], ["Charcoal", "#3A3A38"], ["Black", "#1D1D1B"]
 ];
 const INK = "#2B2B26", NIGHT = "#141412", LIGHT = "#FFFDF8", BOARD_WHITE = "#EFEDE6";      /* dark wording, the Night style, light wording, the board itself */
-const colourHex = name => { const p = PALETTE.find(c => sameWords(c[0], name)); return p ? p[1] : ""; };
+/** A colour's hex: one of the named colours, or a colour picked with "Any colour", which is kept as its hex ("#12AB34"). */
+const colourHex = name => { if (/^#[0-9a-f]{6}$/i.test(txt(name))) return txt(name).toUpperCase(); const p = PALETTE.find(c => sameWords(c[0], name)); return p ? p[1] : ""; };
 const colourList = text => txt(text).split(/\s*,\s*/).filter(Boolean);
 /** How light a colour is, 0 (black) to 1 (white). */
 function light(hex) {
@@ -128,8 +129,9 @@ function artBrief(client, draft, photo) {
 const ART = {
   /** The little camera at the top of a default screen. */
   cam: colour => "<div style=\"color:" + colour + "\"><svg viewBox=\"0 0 24 24\" width=\"1em\" height=\"1em\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" style=\"font-size:7em;display:block;margin:0 auto .3em\"><rect x=\"3\" y=\"7\" width=\"12\" height=\"10\" rx=\"2\"/><path d=\"M15 11l6-3v8l-6-3z\"/></svg></div>",
-  /** Where the live camera shows on a video screen. */
-  live: "<div style=\"position:absolute;left:14%;right:14%;top:12%;bottom:24%;border-radius:1.5em;background:linear-gradient(160deg,#5b5a55,#2f2e2b);display:flex;align-items:center;justify-content:center;color:rgba(255,253,248,.75);font:600 3em 'Inter Tight',sans-serif\"><span style=\"display:inline-block;width:.7em;height:.7em;margin-right:.5em;border-radius:50%;background:#D8553F\"></span>live camera</div>",
+  /** Where the live camera shows on a video screen. Only on screen: the guestbook software draws the live camera itself,
+      so the downloaded picture leaves it out (withoutLive). */
+  live: "<div data-live style=\"position:absolute;left:14%;right:14%;top:12%;bottom:24%;border-radius:1.5em;background:linear-gradient(160deg,#5b5a55,#2f2e2b);display:flex;align-items:center;justify-content:center;color:rgba(255,253,248,.75);font:600 3em 'Inter Tight',sans-serif\"><span style=\"display:inline-block;width:.7em;height:.7em;margin-right:.5em;border-radius:50%;background:#D8553F\"></span>live camera</div>",
   /** The line under the live camera on a video screen. font = a CSS font, such as "italic 400 5em Georgia,'Times New Roman',serif". */
   under: (words, font, colour, more) => "<div data-box style=\"position:absolute;left:4%;right:4%;bottom:7%;text-align:center\"><div data-fit style=\"font:" + font + ";color:" + colour + (more || "") + "\">" + words + "</div></div>",
   /** Small spaced capitals. Nothing at all when there are no words. */
@@ -394,7 +396,47 @@ async function boardPng(art, view, screen, swaps) {
  * Hands finished files to the person. On a phone the share sheet opens, with "Save image" in it. On a laptop they download.
  * Gives back "shared", "saved", "stopped" (they closed the share sheet) or "blocked" (the phone wants a fresh tap first).
  */
-async function handOver(files) {
+/** A screen without the live camera box, for the picture file (the guestbook software draws the camera on top). */
+function withoutLive(piece) {
+  if (!piece || piece.image) return piece;
+  const t = document.createElement("template"); t.innerHTML = piece.html;
+  t.content.querySelectorAll("[data-live]").forEach(el => el.remove());
+  return Object.assign({}, piece, { html: t.innerHTML });
+}
+let crcTable = null;
+const crc32 = bytes => {
+  if (!crcTable) crcTable = Array.from({ length: 256 }, (x, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  let c = 0xFFFFFFFF; for (let i = 0; i < bytes.length; i++) c = crcTable[(c ^ bytes[i]) & 255] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+};
+/** Files packed into one zip, each stored as it is (pictures are squeezed already), so their names inside stay exactly as given. */
+async function zipOf(files) {
+  const parts = [], dir = [], now = new Date(), enc = new TextEncoder();
+  const time = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1), date = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+  let at = 0;
+  for (const f of files) {
+    const data = new Uint8Array(await f.blob.arrayBuffer()), name = enc.encode(f.name), crc = crc32(data);
+    const head = new DataView(new ArrayBuffer(30));
+    [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, 0, 2], [10, time, 2], [12, date, 2], [14, crc, 4], [18, data.length, 4], [22, data.length, 4], [26, name.length, 2], [28, 0, 2]]
+      .forEach(([o, v, n]) => n === 4 ? head.setUint32(o, v, true) : head.setUint16(o, v, true));
+    const entry = new DataView(new ArrayBuffer(46));
+    [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [10, 0, 2], [12, time, 2], [14, date, 2], [16, crc, 4], [20, data.length, 4], [24, data.length, 4], [28, name.length, 2], [30, 0, 2], [32, 0, 2], [34, 0, 2], [36, 0, 2], [38, 0, 4], [42, at, 4]]
+      .forEach(([o, v, n]) => n === 4 ? entry.setUint32(o, v, true) : entry.setUint16(o, v, true));
+    parts.push(head, name, data); dir.push(entry, name);
+    at += 30 + name.length + data.length;
+  }
+  const size = dir.reduce((n, p) => n + p.byteLength, 0), end = new DataView(new ArrayBuffer(22));
+  [[0, 0x06054b50, 4], [4, 0, 2], [6, 0, 2], [8, files.length, 2], [10, files.length, 2], [12, size, 4], [16, at, 4], [20, 0, 2]]
+    .forEach(([o, v, n]) => n === 4 ? end.setUint32(o, v, true) : end.setUint16(o, v, true));
+  return new Blob(parts.concat(dir, [end]), { type: "application/zip" });
+}
+async function handOver(files, bundle) {
+  /* bundle = a zip's name: the files go in one zip, so files with the same names (frame1.png...) from different clients can't
+     get mixed up. A phone that can't share a zip shares the files themselves. */
+  if (bundle) {
+    const zip = new File([await zipOf(files)], bundle, { type: "application/zip" }), phone = matchMedia("(pointer:coarse)").matches && navigator.canShare;
+    if (!phone || navigator.canShare({ files: [zip] })) return handOver([{ name: bundle, blob: zip }]);
+  }
   const list = files.map(f => new File([f.blob], f.name, { type: f.blob.type || "image/png" }));
   if (matchMedia("(pointer:coarse)").matches && navigator.canShare && navigator.canShare({ files: list })) {
     try { await navigator.share({ files: list }); return "shared"; }

@@ -350,6 +350,16 @@ function dzFresh() {
 document.addEventListener("change", e => {
   const el = e.target, b = S.tab === "designs" && S.data ? dzClient() : null; if (!b) return;
   if (el.id === "dz-file") { const file = el.files && el.files[0]; el.value = ""; if (file) dzAddPhoto(b.row, file); return; }
+  if (el.id === "dz-anycol") {                          /* a colour picked with "Any colour": added, kept as its hex, saved like the others */
+    const d = dzDraftOf(b), hex = el.value.toUpperCase(); if (!/^#[0-9A-F]{6}$/.test(hex)) return;
+    const named = PALETTE.find(c => c[1].toUpperCase() === hex), name = named ? named[0] : hex;
+    if (!d.colours.some(n => sameWords(n, name))) {
+      d.colours = d.colours.concat([name]);
+      if (!named) el.closest(".palany").insertAdjacentHTML("beforebegin", palTile(hex, hex, true));
+      syncPalette(); drawColours(b); dzTyped.add(b.row + "|colours"); dzSaveBrief(b.row, "colours");
+    }
+    return;
+  }
   if (!el.matches || !el.matches("#dz-brief [data-key]")) return;
   const d = dzDraftOf(b), key = el.dataset.key, value = key === "notes" ? el.value.trim() : el.value.replace(/\s+/g, " ").trim();
   if (d[key] === value) return;
@@ -437,10 +447,16 @@ function openPalette() {
   const d = dzDraftOf(b), f = moneyOf(b);
   show("dzcol", "<h2 id=\"dlg-title\" tabindex=\"-1\" class=\"tight\">theme colours</h2><p class=\"sub\">" + esc([b.client, f.date ? dayOf(f.date) : ""].filter(Boolean).join(", ")) + "</p>" +
     "<p class=\"palhint\">Tap the colours for this client. The lightest becomes the background.</p><div class=\"pal\">" +
-    PALETTE.map(c => "<button class=\"palc\" type=\"button\" data-do=\"dz-colour\" data-name=\"" + c[0] + "\" aria-pressed=\"" + d.colours.some(n => sameWords(n, c[0])) + "\"><span class=\"sw\" style=\"background:" + c[1] + "\"></span><span>" + c[0] + "</span></button>").join("") +
+    PALETTE.map(c => palTile(c[0], c[1], d.colours.some(n => sameWords(n, c[0])))).join("") +
+    d.colours.filter(isOwnColour).map(hex => palTile(hex, colourHex(hex), true)).join("") +
+    "<label class=\"palc palany\"><input type=\"color\" id=\"dz-anycol\" value=\"#8A9A7B\" aria-label=\"Any colour\"><span class=\"sw\" aria-hidden=\"true\"></span><span>Any colour</span></label>" +
     "</div><p class=\"err\" id=\"err\" role=\"alert\"></p><button class=\"btn big save\" type=\"button\" data-do=\"close\">Done</button>");
   dlg.setAttribute("aria-label", "Theme colours");
 }
+/** One colour on the palette, pressed when the client has it. */
+const palTile = (name, hex, on) => "<button class=\"palc\" type=\"button\" data-do=\"dz-colour\" data-name=\"" + esc(name) + "\" aria-pressed=\"" + on + "\"><span class=\"sw\" style=\"background:" + hex + "\"></span><span>" + esc(name) + "</span></button>";
+/** A colour picked with "Any colour": not one of the 18 named ones. */
+const isOwnColour = name => !PALETTE.some(c => sameWords(c[0], name)) && /^#[0-9a-f]{6}$/i.test(txt(name));
 function syncPalette() {
   const b = dzClient(); if (!b || sheetKind !== "dzcol") return;
   $$(".palc", dlg).forEach(el => el.setAttribute("aria-pressed", dzDraftOf(b).colours.some(n => sameWords(n, el.dataset.name))));
@@ -458,14 +474,16 @@ async function dzSave(el) {
   try {
     const photo = dzPhotoOf(b.row), swaps = photo ? { [photo.url]: await asDataUrl(photo.blob) } : {};
     let files;
-    if (what === "screens") files = [["default", "default screen"], ["video", "video screen"], ["thanks", "thank you screen"]].map(k => ({ name: stem + k[1] + ".png", make: () => screenPng(a.screens[k[0]], swaps) }));
+    /* the guestbook software reads frame1 (default screen), frame2 (video screen) and frame3 (thank you screen) */
+    if (what === "screens") files = ["default", "video", "thanks"].map((k, n) => ({ name: "frame" + (n + 1) + ".png", make: () => screenPng(k === "video" ? withoutLive(a.screens.video) : a.screens[k], swaps) }));
     else if (what === "stickers") files = ["top", "bottom"].map(which => ({ name: stem + which + " sticker " + STICKERS[which].w + " x " + STICKERS[which].h + " mm.png", make: () => stickerPng(a, which, swaps) }));
     else { const view = S.dz.page === "open" ? S.dz.view : "angle"; files = [{ name: stem + "board.png", make: () => boardPng(a, view, boardScreen(b), swaps) }]; }
     for (const f of files) f.blob = await f.make();
-    const how = await handOver(files);
-    if (how === "saved") toast(files.length > 1 ? "Saved " + files.length + " pictures to your downloads." : "Saved the picture to your downloads.");
+    const bundle = what === "screens" ? fileSafe(stem + styleTitle(i) + " screens") + ".zip" : "";
+    const how = await handOver(files, bundle);
+    if (how === "saved") toast(bundle ? "Saved frame1, frame2 and frame3 to your downloads, in “" + bundle + "”." : files.length > 1 ? "Saved " + files.length + " pictures to your downloads." : "Saved the picture to your downloads.");
     else if (how === "blocked") {
-      dzReady = files;
+      dzReady = { files, bundle };
       show("dzready", "<h2 id=\"dlg-title\" tabindex=\"-1\" class=\"tight\">" + (files.length > 1 ? "pictures ready" : "picture ready") + "</h2><p class=\"sub\">" + esc(withoutBrackets(b.client) + ", " + styleTitle(i)) + "</p>" +
         "<p class=\"err\" id=\"err\" role=\"alert\"></p><button class=\"btn big save\" type=\"button\" data-do=\"dz-hand\">" + (files.length > 1 ? "Save the " + files.length + " pictures" : "Save the picture") + "</button><button class=\"btn line cancel\" type=\"button\" data-do=\"close\">Cancel</button>");
     }
@@ -510,5 +528,5 @@ Object.assign(TAPS, {
   "dz-turn": el => { S.dz.view = S.dz.view === "angle" ? "front" : "angle"; $("#dz-board").dataset.show = S.dz.view; el.textContent = turnWords(); },
   "dz-limits": el => { S.dz.limits = !S.dz.limits; $("#dz-board").classList.toggle("limits", S.dz.limits); el.textContent = limitWords(); },
   "dz-save": el => dzSave(el),
-  "dz-hand": async () => { const files = dzReady; if (!files) return; const how = await handOver(files); if (how === "blocked") say("The pictures didn’t save. Try again."); else { dzReady = null; hide(); } }
+  "dz-hand": async () => { const ready = dzReady; if (!ready) return; const how = await handOver(ready.files, ready.bundle); if (how === "blocked") say("The pictures didn’t save. Try again."); else { dzReady = null; hide(); } }
 });
