@@ -13,11 +13,18 @@ const PLANE = [1800, 3000];                      /* the board plane, which match
 const FRAME = { x: 447, y: 453, w: 930, h: 2124, mm: 700 };
 const MM = FRAME.w / FRAME.mm;
 const STICKER_X = FRAME.x + FRAME.w / 2;         /* both stickers are centred across the board: 650 mm wide leaves 25 mm each side */
-const CLEAR = 40;                                /* each sticker keeps at least 40 mm from the frame at the top and bottom (Aadil, 26 Nov 2026) */
-const STICKERS = {                               /* the biggest each sticker can be, in mm (Aadil, 26 Nov 2026), and where its zone starts down the plane (px) */
-  top: { w: 650, h: 200, y: Math.max(516, FRAME.y + CLEAR * MM) },                       /* where the design puts it, which is clear of the frame */
-  bottom: { w: 650, h: 450, y: FRAME.y + FRAME.h - (CLEAR + 450) * MM }                  /* as low as it can go, 40 mm above the frame */
+/* The stickers (Aadil, 26 Nov 2026). The top one carries the "leave a message" line, the bottom one the names.
+   w and h: the biggest each can be, in mm. gap: how far its limit stays from the frame's inside edge, in mm.
+   start: where the vinyl starts, in mm from that same edge. The top sticker's first row sits 50 mm down from the top
+   of the frame and the wording builds down; the bottom sticker's last row sits 50 mm up from the bottom and builds up. */
+const STICKERS = {
+  top: { w: 650, h: 200, from: "top", gap: 40, start: 50 },
+  bottom: { w: 650, h: 430, from: "bottom", gap: 10, start: 50 }
 };
+Object.keys(STICKERS).forEach(which => {
+  const z = STICKERS[which];
+  z.y = z.from === "top" ? FRAME.y + z.gap * MM : FRAME.y + FRAME.h - (z.gap + z.h) * MM;   /* where its limit starts down the plane (px) */
+});
 const BOARD_PX = [1080, 1800];                   /* the two board photos */
 /* The design kit's matrices (section 8): the sticker plane seen at an angle, and the board's screen in each view. */
 const M_ANGLE = [0.99661988, 0.096063979, 0, 8.2348335e-05, 0.013639357, 1.0535973, 0, 1.3101167e-05, 0, 0, 1, 0, 30.728791, -18.569045, 0, 1];
@@ -141,7 +148,7 @@ let fitHost = null;
  * Gives back the HTML with the new sizes written in, so it looks the same at any size afterwards.
  * [data-fit] is one line (or lines split with <br>) that must fit across its [data-box]. [data-fitbox] is a block that must fit inside its parent.
  */
-function fitted(html, w, h, rootStyle, room) {
+function fitted(html, w, h, rootStyle, room, from) {
   if (!fitHost) {
     fitHost = document.createElement("div"); fitHost.setAttribute("aria-hidden", "true");
     fitHost.style.cssText = "position:absolute;left:-30000px;top:0;visibility:hidden;pointer-events:none";
@@ -157,12 +164,40 @@ function fitted(html, w, h, rootStyle, room) {
   });
   $$("[data-fitbox]", root).forEach(el => {
     const r = el.getBoundingClientRect(), box = inside(el.parentElement), s = Math.min(1, box[0] * room / r.width, box[1] * room / r.height);
-    if (s < 1) el.style.transform = "scale(" + s.toFixed(4) + ")";
+    if (!from) { if (s < 1) el.style.transform = "scale(" + s.toFixed(4) + ")"; return; }
+    /* a sticker: it shrinks towards its starting line, then moves so its first (or last) row of letters sits on that line */
+    const nudge = inkGap(el, from) * s;
+    el.style.transformOrigin = from === "top" ? "50% 0" : "50% 100%";
+    el.style.transform = (nudge ? "translateY(" + (from === "top" ? -nudge : nudge).toFixed(2) + "px) " : "") + (s < 1 ? "scale(" + s.toFixed(4) + ")" : "");
   });
   const out = root.innerHTML; fitHost.innerHTML = "";
   return out;
 }
 const ZONE_STYLE = "display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.05;font-size:16px;";
+/** A sticker's box: its wording starts at the vinyl's starting line and builds away from the frame edge it is measured from. */
+const zoneCss = which => { const z = STICKERS[which], pad = ((z.start - z.gap) * MM).toFixed(2) + "px;"; return ZONE_STYLE + (z.from === "top" ? "justify-content:flex-start;padding-top:" : "justify-content:flex-end;padding-bottom:") + pad; };
+let inkCanvas = null;
+/**
+ * How far the ink of a sticker's first row (top sticker) or last row (bottom sticker) is from the edge of its box, in px.
+ * A line of words has a little space above and below its letters; this is that space, so the letters themselves meet the line.
+ * Shapes and photos have none.
+ */
+function inkGap(box, from) {
+  const all = [box].concat($$("*", box)).filter(el => el.tagName !== "BR" && el.getClientRects().length);      /* a line break has a box of its own: not a row */
+  let edge = null, pick = null;
+  all.forEach(el => { const r = el.getBoundingClientRect(), y = from === "top" ? r.top : r.bottom; if (edge === null || (from === "top" ? y < edge - 0.5 : y > edge + 0.5)) { edge = y; pick = el; } else if (Math.abs(y - edge) <= 0.5) pick = el; });
+  const texts = pick ? Array.from(pick.childNodes).filter(n => n.nodeType === 3 && n.textContent.trim()) : [];
+  if (!texts.length) return 0;
+  const cs = getComputedStyle(pick), t = cs.textTransform;
+  let words = (from === "top" ? texts[0] : texts[texts.length - 1]).textContent.trim();
+  words = t === "uppercase" ? words.toUpperCase() : t === "lowercase" ? words.toLowerCase() : words;
+  const ctx = (inkCanvas || (inkCanvas = document.createElement("canvas"))).getContext("2d");
+  ctx.font = cs.fontStyle + " " + cs.fontWeight + " " + cs.fontSize + " " + cs.fontFamily;
+  const m = ctx.measureText(words), A = m.fontBoundingBoxAscent, D = m.fontBoundingBoxDescent;
+  if (!(A > 0) || !(D >= 0) || !(m.actualBoundingBoxAscent >= 0)) return 0;
+  const line = parseFloat(cs.lineHeight) || A + D, half = (line - A - D) / 2;
+  return Math.max(0, from === "top" ? half + A - m.actualBoundingBoxAscent : half + D - m.actualBoundingBoxDescent);
+}
 const zoneInner = html => "<div data-fitbox style=\"display:flex;flex-direction:column;align-items:center;white-space:nowrap;flex-shrink:0\">" + html + "</div>";
 
 /**
@@ -176,7 +211,7 @@ function artFor(brief) {
       const s = style.screen(kind, brief);
       screens[kind] = s.image ? { image: s.image } : { bg: s.bg, html: fitted(s.html, 1000, 562.5, "font-size:10px;line-height:1.1;", 0.96) };
     });
-    const stickers = style.board(brief), fit = which => fitted(zoneInner(stickers[which]), zoneBox(which).w, zoneBox(which).h, ZONE_STYLE, 0.96);
+    const stickers = style.board(brief), fit = which => fitted(zoneInner(stickers[which]), zoneBox(which).w, zoneBox(which).h, zoneCss(which), 0.96, STICKERS[which].from);
     return { screens, top: fit("top"), bottom: fit("bottom") };
   });
 }
@@ -189,7 +224,7 @@ function screenHtml(piece, w) {
   return piece.image ? "<div aria-hidden=\"true\" class=\"scr\" style=\"" + size + "background:url(" + piece.image + ") center/cover\"></div>"
     : "<div aria-hidden=\"true\" class=\"scr\" style=\"" + size + "background:" + piece.bg + ";font-size:" + (w / 100).toFixed(2) + "px\">" + piece.html + "</div>";
 }
-const zoneHtml = (which, inner) => { const z = zoneBox(which); return "<div class=\"zone\" style=\"left:" + z.x + "px;width:" + z.w + "px;top:" + z.y + "px;height:" + z.h + "px\">" + inner + "</div>"; };
+const zoneHtml = (which, inner) => { const z = zoneBox(which); return "<div class=\"zone\" style=\"left:" + z.x + "px;width:" + z.w + "px;top:" + z.y + "px;height:" + z.h + "px;" + zoneCss(which) + "\">" + inner + "</div>"; };
 const limitHtml = which => { const z = zoneBox(which); return "<div class=\"limit\" style=\"left:" + z.x + "px;width:" + z.w + "px;top:" + z.y + "px;height:" + z.h + "px\"><span>max " + mmWords(which) + "</span></div>"; };
 /**
  * One view of the board, w px wide: the photo, the ticked screen style on its screen, and the two stickers.
@@ -275,7 +310,7 @@ async function screenPng(piece, swaps) {
 /** One sticker as a PNG at its print size, on a see-through background. */
 async function stickerPng(art, which, swaps) {
   const z = zoneBox(which), px = mm => Math.round(mm / 25.4 * PRINT_DPI);
-  return pngOf(await shot("<div style=\"position:absolute;inset:0;overflow:hidden;" + ZONE_STYLE + "\">" + art[which] + "</div>", z.w, z.h, px(STICKERS[which].w), px(STICKERS[which].h), swaps));
+  return pngOf(await shot("<div style=\"position:absolute;inset:0;overflow:hidden;" + zoneCss(which) + "\">" + art[which] + "</div>", z.w, z.h, px(STICKERS[which].w), px(STICKERS[which].h), swaps));
 }
 /** The board as a PNG, the size of the board photo: the photo, the screen on it, and the stickers printed onto it. */
 async function boardPng(art, view, screen, swaps) {
@@ -287,7 +322,7 @@ async function boardPng(art, view, screen, swaps) {
   }
   const print = canvasOf(W, H), pctx = print.getContext("2d");
   for (const which of ["top", "bottom"]) {
-    const z = zoneBox(which), flat = await shot("<div style=\"position:absolute;inset:0;overflow:hidden;" + ZONE_STYLE + "\">" + art[which] + "</div>", z.w, z.h, z.w * 2, z.h * 2, swaps);
+    const z = zoneBox(which), flat = await shot("<div style=\"position:absolute;inset:0;overflow:hidden;" + zoneCss(which) + "\">" + art[which] + "</div>", z.w, z.h, z.w * 2, z.h * 2, swaps);
     warp(pctx, flat, z.w, z.h, (x, y) => (view === "angle" ? through(M_ANGLE, z.x + x, z.y + y) : [z.x + x, z.y + y]).map(v => v * k));
   }
   ctx.globalCompositeOperation = "multiply"; ctx.drawImage(print, 0, 0); ctx.globalCompositeOperation = "source-over";

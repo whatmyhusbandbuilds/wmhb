@@ -20,8 +20,10 @@
 
    screen(kind, b) gives one screen: kind is "default", "video" or "thanks". It returns the background and the HTML.
      Sizes are in em, and 100em is the width of the screen, so it looks the same small on the wheel and full size as a PNG.
-   board(b) gives the two stickers, top and bottom. Sizes are in px, and about 1.33 px is 1 mm on the board (MM in art.js).
-     Each sticker is centred in its zone and shrinks as a whole if it is too big for it.
+   board(b) gives the two stickers. The top sticker carries the "leave a message" line, the bottom sticker the names
+     (Aadil, 26 Nov 2026). Sizes are in px, and about 1.33 px is 1 mm on the board (MM in art.js).
+     The top sticker's first row of vinyl sits 50 mm down from the frame and builds down; the bottom sticker's last row sits
+     50 mm up from the frame and builds up. Both are centred left to right and shrink as a whole if they are too big.
 
    Helpers from art.js: ART.cam (camera icon), ART.live (where the live camera shows), ART.middle (things centred, one under
    the other), ART.caps (small spaced capitals), ART.line (one line that shrinks to fit), ART.under (the line under the camera). */
@@ -38,9 +40,9 @@ addStyle({
   board(b) {
     const gold = b.accentOnBoard;
     return {
-      top: "<div style=\"font:italic 400 108px Georgia,'Times New Roman',serif;color:" + gold + "\">" + b.names + "</div>" +
-        (b.line2 ? "<div style=\"width:180px;height:6px;margin:18px 0;background:" + gold + "\"></div><div style=\"font:700 30px 'Inter Tight',sans-serif;color:" + b.ink + ";letter-spacing:.2em;text-transform:uppercase\">" + b.dots + "</div>" : ""),
-      bottom: "<div style=\"font:italic 400 104px Georgia,'Times New Roman',serif;color:" + gold + "\">" + b.wordingLower(2) + "</div>"
+      top: "<div style=\"font:italic 400 92px Georgia,'Times New Roman',serif;color:" + gold + "\">" + b.wordingLower(2) + "</div>",
+      bottom: "<div style=\"font:italic 400 120px Georgia,'Times New Roman',serif;color:" + gold + "\">" + b.names + "</div>" +
+        (b.line2 ? "<div style=\"width:200px;height:6px;margin:20px 0;background:" + gold + "\"></div><div style=\"font:700 34px 'Inter Tight',sans-serif;color:" + b.ink + ";letter-spacing:.2em;text-transform:uppercase\">" + b.dots + "</div>" : "")
     };
   }
 });

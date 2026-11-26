@@ -14,9 +14,9 @@ addStyle({
   },
   board(b) {
     return {
-      top: "<div style=\"font:italic 400 104px Georgia,'Times New Roman',serif;color:" + b.ink + "\">" + b.names + "</div>",
-      bottom: "<div style=\"position:relative;width:340px;height:340px;border-radius:50%;overflow:hidden;font-size:8px\">" + b.photoPlain + "</div><div style=\"height:30px\"></div>" +
-        "<div style=\"font:700 34px 'Inter Tight',sans-serif;color:" + b.accentOnBoard + ";letter-spacing:.2em;text-transform:uppercase\">" + b.wording + "</div>"
+      top: "<div style=\"font:700 40px 'Inter Tight',sans-serif;color:" + b.accentOnBoard + ";letter-spacing:.2em;text-transform:uppercase\">" + b.wording + "</div>",
+      bottom: "<div style=\"position:relative;width:300px;height:300px;border-radius:50%;overflow:hidden;font-size:8px\">" + b.photoPlain + "</div><div style=\"height:26px\"></div>" +
+        "<div style=\"font:italic 400 96px Georgia,'Times New Roman',serif;color:" + b.ink + "\">" + b.names + "</div>"
     };
   }
 });

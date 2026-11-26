@@ -14,9 +14,9 @@ addStyle({
   board(b) {
     const dark = "#1d1d1b", gold = b.accentOnBoard;
     return {
-      top: "<div style=\"font:400 104px Georgia,'Times New Roman',serif;color:" + dark + "\">" + b.names + "</div><div style=\"width:220px;height:6px;margin:20px 0;background:" + gold + "\"></div>",
-      bottom: "<div style=\"font:700 40px 'Inter Tight',sans-serif;color:" + gold + ";letter-spacing:.2em;text-transform:uppercase\">" + b.wording + "</div>" +
-        (b.line2 ? "<div style=\"height:26px\"></div><div style=\"font:400 64px Georgia,'Times New Roman',serif;color:" + dark + "\">" + b.line2 + "</div>" : "")
+      top: "<div style=\"font:700 44px 'Inter Tight',sans-serif;color:" + gold + ";letter-spacing:.2em;text-transform:uppercase\">" + b.wording + "</div><div style=\"width:220px;height:6px;margin:24px 0 0;background:" + gold + "\"></div>",
+      bottom: "<div style=\"font:400 112px Georgia,'Times New Roman',serif;color:" + dark + "\">" + b.names + "</div>" +
+        (b.line2 ? "<div style=\"height:22px\"></div><div style=\"font:400 60px Georgia,'Times New Roman',serif;color:" + dark + "\">" + b.line2 + "</div>" : "")
     };
   }
 });

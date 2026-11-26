@@ -13,8 +13,8 @@ addStyle({
   board(b) {
     const sans = "'Inter Tight',sans-serif", colour = b.mainOnBoard;
     return {
-      top: "<div style=\"font:900 82px " + sans + ";color:" + colour + ";letter-spacing:-.03em\">" + b.namesUpper + "</div>",
-      bottom: "<div style=\"font:900 132px " + sans + ";color:" + colour + ";letter-spacing:-.03em;line-height:.95\">" + b.wordingUpper(3) + "</div>"
+      top: "<div style=\"font:900 96px " + sans + ";color:" + colour + ";letter-spacing:-.03em;line-height:.95\">" + b.wordingUpper(2) + "</div>",
+      bottom: "<div style=\"font:900 132px " + sans + ";color:" + colour + ";letter-spacing:-.03em;line-height:.95;text-transform:uppercase\">" + b.stack + "</div>"
     };
   }
 });
