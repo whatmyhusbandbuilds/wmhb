@@ -246,21 +246,39 @@ function dzPick(row, side, index) {
     () => { const now = eventAt(row); return now ? txt(designOf(now)[side]) : ""; },
     v => { const now = eventAt(row); if (now) designOf(now)[side] = v; });
 }
+/**
+ * The typed brief boxes whose save failed, as "row|key". While the tracker still doesn't have what was typed, they hold
+ * the app's reload to a newer version (app.js, busyTyping), on any tab, and they are tried again when fresh data comes
+ * in or the phone is back online (dzRetry). Only failed saves count: a brief changed elsewhere (on the laptop) since
+ * this phone first showed it also differs from what is on screen here, and must not be written over.
+ */
+const dzFailed = new Set();
 /** Saves one part of the brief once it has been changed. */
-function dzSaveBrief(row, key) {
+async function dzSaveBrief(row, key) {
   const b = eventAt(row), d = S.dzDraft[row]; if (!b || !d) return;
   const value = key === "colours" ? d.colours.join(", ") : d[key];
-  saveLatest("brief" + row + key, "saveBrief", { row, id: b.id, brief: { [key]: value } }, value,
+  const saved = await saveLatest("brief" + row + key, "saveBrief", { row, id: b.id, brief: { [key]: value } }, value,
     () => { const now = eventAt(row); return now ? txt(designOf(now)[key]) : ""; },
     v => {
       const now = eventAt(row); if (now) designOf(now)[key] = v;
       /* v differs from what is on screen only when a save has failed. Colour chips go back. Typed words stay in their box,
-         so nothing typed is lost: the app says it didn't save, and tries again when the brief is left or designs are generated. */
+         so nothing typed is lost: the app says it didn't save, and tries again when the brief is left, designs are generated,
+         fresh data comes in or the phone is back online (dzRetry). */
       if (key === "colours" && d.colours.join(", ") !== v) { d.colours = colourList(v); if (S.dz.row === row) { drawColours(b); syncPalette(); } }
     });
+  if (saved === true) dzFailed.delete(row + "|" + key);
+  else if (saved === false && BRIEF_TEXT.includes(key)) dzFailed.add(row + "|" + key);        /* colour chips go back when they fail, so only typed words wait */
 }
+/** The typed boxes of the brief, the parts a failed save keeps on screen. */
+const BRIEF_TEXT = ["names", "line2", "defaultWording", "thanksWording", "notes"];
 /** The typed parts of the brief that the tracker doesn't have yet (a save failed). The usual wording, left as it came, doesn't count. */
-const dzUnsaved = b => { const d = S.dzDraft[b.row], t = designOf(b); return d ? ["names", "line2", "defaultWording", "thanksWording", "notes"].filter(k => d[k] !== txt(t[k]) && !(!txt(t[k]) && d[k] === (k === "defaultWording" ? WORDING : k === "thanksWording" ? THANKS : ""))) : []; };
+const dzUnsaved = b => { const d = S.dzDraft[b.row], t = designOf(b); return d ? BRIEF_TEXT.filter(k => d[k] !== txt(t[k]) && !(!txt(t[k]) && d[k] === (k === "defaultWording" ? WORDING : k === "thanksWording" ? THANKS : ""))) : []; };
+/** The failed boxes that are still waiting: the tracker doesn't have what was typed. Boxes it now has, or whose booking is gone, drop out. */
+function dzWaiting() {
+  return [...dzFailed].filter(k => { const [row, key] = k.split("|"), b = S.data && eventAt(+row); if (b && dzUnsaved(b).includes(key)) return true; dzFailed.delete(k); return false; });
+}
+/** Tries the waiting boxes again: fresh data has come in, or the phone is back online. Once they land, the app can reload (app.js). */
+function dzRetry() { if (S.data) dzWaiting().forEach(k => { const [row, key] = k.split("|"); dzSaveBrief(+row, key); }); }
 document.addEventListener("change", e => {
   const el = e.target, b = S.tab === "designs" && S.data ? dzClient() : null; if (!b) return;
   if (el.id === "dz-file") { const file = el.files && el.files[0]; el.value = ""; if (file) dzAddPhoto(b.row, file); return; }
@@ -281,7 +299,9 @@ async function dzGenerate() {
   const row = b.row, d = dzReadBoxes(b), brief = { names: d.names, line2: d.line2, defaultWording: d.defaultWording, thanksWording: d.thanksWording, colours: d.colours.join(", "), notes: d.notes };
   const saved = save("saveBrief", { row, id: b.id, brief, generated: true }, data => { const now = data.bookings.find(x => x.row === row); if (now) Object.assign(designOf(now), brief, { madeOn: todayIso() }); });
   dzGo("styles", "fwd");
-  if (!(await saved) && S.tab === "designs" && S.dz.row === row && S.dz.page !== "brief") dzGo("brief", "back");      /* it didn't save: back to the brief, which still holds what was typed */
+  const ok = !!(await saved), now = eventAt(row);
+  BRIEF_TEXT.forEach(key => { if (ok) dzFailed.delete(row + "|" + key); else if (now && dzUnsaved(now).includes(key)) dzFailed.add(row + "|" + key); });
+  if (!ok && S.tab === "designs" && S.dz.row === row && S.dz.page !== "brief") dzGo("brief", "back");      /* it didn't save: back to the brief, which still holds what was typed */
 }
 
 /* ---------- photos ---------- */
