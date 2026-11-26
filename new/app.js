@@ -177,13 +177,15 @@ const TABS = [
   { id: "money", label: "Money" },
   { id: "eventday", label: "Event day" },
   { id: "videos", label: "Videos", later: "stage 5" },
-  { id: "designs", label: "Designs", later: "stage 4" },
+  { id: "designs", label: "Designs" },
   { id: "prices", label: "Prices and packages", group: "Business", later: "stage 5" },
   { id: "partners", label: "Partners", group: "Business", next: ["Decor businesses that send you clients", "Who referred who, and the 10% fee owed"] },
   { id: "settings", label: "Settings", end: true, next: ["Aadil’s and Sara’s logins", "Email signature and templates"] }
 ];
 /* A screen adds itself here: SCREENS.clients = { html(), fill(), right, side }.
-   right = a button for the top right. side = what sits right of the title on a laptop, if not that button. */
+   right = a button for the top right. side = what sits right of the title on a laptop, if not that button.
+   A screen with pages of its own (Designs) may also have top() = its own top for a page, cls() = a class for the page
+   being drawn, and reset() = go back to its first page, for when its tab is tapped in the menu. */
 const SCREENS = {};
 
 function drawMenu() {
@@ -217,8 +219,10 @@ const REFRESH = "<button class=\"rbtn wm-card\" type=\"button\" data-do=\"refres
  * right = a button for the top right. side = what sits right of the title on a laptop (the same button, unless given).
  * cls = a class for a screen whose design has a different gap under the title.
  */
+/** The phone's top bar: menu button, logo and Refresh. */
+const barHtml = right => "<div class=\"bar ph\"><div class=\"l\"><button class=\"mbtn\" type=\"button\" data-do=\"menu-open\" aria-label=\"Open menu\" aria-expanded=\"false\" aria-controls=\"menu\"><svg aria-hidden=\"true\" width=\"26\" height=\"26\" viewBox=\"0 0 24 24\"><path d=\"M4 7h16M4 12h16M4 17h16\"/></svg></button>" + LOGO + "</div><div class=\"r\">" + REFRESH + (right || "") + "</div></div>";
 function headHtml(title, right, side, cls) {
-  return "<div class=\"head" + (cls ? " " + cls : "") + "\"><div class=\"bar ph\"><div class=\"l\"><button class=\"mbtn\" type=\"button\" data-do=\"menu-open\" aria-label=\"Open menu\" aria-expanded=\"false\" aria-controls=\"menu\"><svg aria-hidden=\"true\" width=\"26\" height=\"26\" viewBox=\"0 0 24 24\"><path d=\"M4 7h16M4 12h16M4 17h16\"/></svg></button>" + LOGO + "</div><div class=\"r\">" + REFRESH + (right || "") + "</div></div>" +
+  return "<div class=\"head" + (cls ? " " + cls : "") + "\">" + barHtml(right) +
     "<div class=\"titlerow\"><h1>" + esc(title) + "</h1>" + (side != null ? side : right ? right.replace("class=\"btn\"", "class=\"btn lp\"") : "") + "</div></div>";
 }
 const boxHtml = (lead, lines) => "<div class=\"next wm-card\"><p>" + esc(lead) + "</p>" + lines.map(x => "<div><i aria-hidden=\"true\"></i><span>" + esc(x) + "</span></div>").join("") + "</div>";
@@ -232,9 +236,9 @@ function go(tab) {
   if (t.next) body = headHtml(title) + boxHtml("We design this screen next. It will have:", t.next);
   else if (!screen) body = headHtml(title) + boxHtml("This screen is designed and not built yet.", ["It gets built in " + t.later + "."]);
   else if (!S.data) body = headHtml(title, screen.right) + (S.trouble ? troubleHtml() : "<p class=\"wait wm-card\" role=\"status\"><span>Loading your bookings…</span></p>");
-  else body = headHtml(title, screen.right, !phone() && screen.side ? screen.side() : null, screen.head) + troubleHtml() + screen.html() + footHtml();
+  else body = (screen.top && screen.top() || headHtml(title, screen.right, !phone() && screen.side ? screen.side() : null, screen.head)) + troubleHtml() + screen.html() + footHtml();
   /* a screen with no laptop design keeps the phone layout, in a centred column */
-  $("#view").innerHTML = "<section class=\"view wm-scroll" + (screen && screen.narrow ? " narrow" : "") + "\" aria-label=\"" + esc(t.label) + "\">" + body + "</section>";
+  $("#view").innerHTML = "<section class=\"view wm-scroll" + (screen && screen.narrow ? " narrow" : "") + (screen && screen.cls && S.data ? screen.cls() : "") + "\" aria-label=\"" + esc(t.label) + "\">" + body + "</section>";
   if (screen && S.data && !t.next) screen.fill(true);
   drawMenu(); stamp(); scrollTo(0, 0);
 }
@@ -372,7 +376,7 @@ function say(msg) { const slot = dlg.open && $("#err", dlg); if (slot) slot.text
 
 /* ---------- taps ---------- */
 const TAPS = {
-  "tab": el => { go(el.dataset.tab); if (menuOpen()) menu(false); },
+  "tab": el => { const screen = SCREENS[el.dataset.tab]; if (screen && screen.reset) screen.reset(); go(el.dataset.tab); if (menuOpen()) menu(false); },
   "menu-open": () => menu(true),
   "menu-close": () => menu(false),
   "close": () => hide(),

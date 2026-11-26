@@ -23,9 +23,10 @@ function demoServer(fn, arg) {
       bookings: [
         bk(5, 1, "City Expo", at(-25), "Expo / show", "Showgrounds", "Market hire", 250),
         bk(6, 2, "Olivia", at(-10), "Birthday", "Golf Resort", "Celebration hire", 910),
-        on(bk(7, 3, "Charlotte", at(17), "Birthday", "City Hotel", "Celebration hire", 1150, { email: "charlotte@example.com" }), { venueConfirmed: "Yes" }),
+        on(bk(7, 3, "Charlotte", at(17), "Birthday", "City Hotel", "Celebration hire", 1150, { email: "charlotte@example.com" }), { venueConfirmed: "Yes" }, { names: "Charlotte's 30th" }),
         on(bk(8, 4, "Tane Rewi", at(11), "Birthday", "Community Hall", "Celebration hire", 910, { phone: "021 555 0101", suburb: "Henderson" }), { hours: "4", setupTime: "2:00 PM", runningIt: "Sara", venueConfirmed: "Yes" }, { screen: "Style 4: Arch", board: "Style 1: Classic" }),
-        on(bk(9, 5, "Ruby Carter", at(24), "Wedding", "Valley Estate", "Forever", 1270, { hostHours: 2, insta: "@sample.ruby" }), { hours: "6", setupTime: "2:30 PM", startTime: "4:00 PM", runningIt: "Aadil and Sara", venueConfirmed: "Yes", powerSorted: "Yes" }),
+        on(bk(9, 5, "Ruby Carter", at(24), "Wedding", "Valley Estate", "Forever", 1270, { hostHours: 2, insta: "@sample.ruby" }), { hours: "6", setupTime: "2:30 PM", startTime: "4:00 PM", runningIt: "Aadil and Sara", venueConfirmed: "Yes", powerSorted: "Yes" },
+          { names: "Ruby & James", line2: long(at(24)), defaultWording: "Leave us a video message", thanksWording: "Thank you for your message", colours: "Sage, Cream, Gold", notes: "Garden wedding, soft and elegant. Loves the arch at the venue. No pink.", photos: "sample", madeOn: at(-2) }),
         on(bk(10, 6, "Hannah Reid", at(108), "Wedding", "Waikato", "Forever", 1305, { region: "Hamilton", phone: "021 555 0123" }), { hours: "6" }),
         on(bk(11, 7, "Mele", at(150), "Engagement party", "", "Celebration hire", 990, { noPowerPoint: "Yes", email: "mele@example.com" })),
         on(bk(12, 8, "Glow Studio (Mia)", at(9), "Brand / corporate", "To confirm, likely their studio", "Corporate hire", 910, { phone: "09 555 0100" }), { runningIt: "Aadil" }),
@@ -59,8 +60,17 @@ function demoServer(fn, arg) {
       packs: [["Classic", "Weddings", 550, 3, "Yes", 28, "30% of the total"], ["Forever", "Weddings", 795, 6, "Yes", 28, "30% of the total"],
         ["Celebration hire", "Birthdays & celebrations", 450, 3, "Yes", 14, "$200"], ["Corporate hire", "Corporate (30% deposit)", 900, 4, "Yes", 28, "30% of the total"],
         ["Market hire", "Markets & fairs", 250, 4, "No", 14, "$150"], ["Custom", "Anything", "", "", "Yes", 14, ""]],
-      terms: [["Booking terms", ""], ["Smallest deposit that marks Booked", "$150"], ["Refundable bond", "$250"], ["Old 7-day terms up to invoice no.", "5"]]
+      terms: [["Booking terms", ""], ["Smallest deposit that marks Booked", "$150"], ["Refundable bond", "$250"], ["Old 7-day terms up to invoice no.", "5"]],
+      photos: {}, photoCount: 0
     };
+    /* two stand-in "photos" for one client's brief, drawn here: no real photo is kept in the repo */
+    demoDb.photos[9] = [["#8A9A7B", "#B8975A"], ["#B8975A", "#8A9A7B"]].map((pair, n) => {
+      const c = document.createElement("canvas"); c.width = c.height = 480;
+      const x = c.getContext("2d"), g = x.createLinearGradient(0, 0, 480, 480);
+      g.addColorStop(0, pair[0]); g.addColorStop(1, pair[1]); x.fillStyle = g; x.fillRect(0, 0, 480, 480);
+      x.fillStyle = "rgba(255,253,248,.35)"; x.beginPath(); x.arc(240, 260, 106, 0, 7); x.fill();
+      return { id: "sample-photo-" + (++demoDb.photoCount), name: "Sample photo " + (n + 1) + ".jpg", mime: "image/jpeg", data: c.toDataURL("image/jpeg", 0.8).split(",")[1] };
+    });
   }
   const PACKING = ["Top board", "Bottom board", "Base", "Laptop and charger", "Camera", "Monitor", "Light", "Vintage phone", "Speaker", "Cable box", "10 m extension cord", "Table message cards"];
   const db = demoDb, of = (rows, inv, what) => rows.filter(p => p.invoice === inv && (!what || p.what === what)).reduce((s, p) => s + p.amount, 0);
@@ -84,6 +94,18 @@ function demoServer(fn, arg) {
     arg.payments.forEach(p => db.payments.push({ date: t, invoice: arg.invoice, amount: num(p.amount), what: p.what, note: p.note || "" }));
   } else if (fn === "addExpense") {
     db.expenses.push({ date: t, what: arg.what, type: arg.type, amount: num(arg.amount), invoice: arg.invoice || "", notes: arg.notes || "" });
+  } else if (fn === "saveBrief" || fn === "setDesignPick" || fn === "addBriefPhoto" || fn === "getBriefPhotos") {
+    const b = db.bookings.find(x => x.row === arg.row && x.id === arg.id); if (!b) throw told("The bookings have moved. Press Refresh and try again.");
+    const later = (value, ms) => new Promise(done => setTimeout(() => done(value), ms || 350));
+    if (fn === "saveBrief") {
+      Object.keys(arg.brief || {}).forEach(k => { b.designs[k] = Array.isArray(arg.brief[k]) ? arg.brief[k].join(", ") : arg.brief[k]; });
+      if (arg.generated) b.designs.madeOn = t;
+      return later({ saved: true });
+    }
+    if (fn === "setDesignPick") { ["screen", "board"].forEach(k => { if (k in arg) b.designs[k] = arg[k]; }); return later({ saved: true }); }
+    const photos = db.photos[b.row] || (db.photos[b.row] = []);
+    if (fn === "addBriefPhoto") { photos.unshift({ id: "sample-photo-" + (++db.photoCount), name: arg.name, mime: arg.mime, data: arg.data }); b.designs.photos = "sample"; return later({ photo: { id: photos[0].id, name: photos[0].name }, folder: "sample" }, 600); }
+    return later({ photos: photos.slice(0, 12) }, 500);
   } else if (fn === "setEventDay" || fn === "setPacking") {
     const b = db.bookings.find(x => x.row === arg.row && x.id === arg.id); if (!b) throw told("The bookings have moved. Press Refresh and try again.");
     /* a sheet shows a saved time its own way, in capitals */
