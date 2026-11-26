@@ -80,8 +80,8 @@ SCREENS.clients = {
     return "<div class=\"fbar ph\" data-screen=\"clients\"><button class=\"cardbtn wm-card\" type=\"button\" id=\"fopen\" data-do=\"filter-open\" data-fid=\"fopen\" aria-haspopup=\"dialog\"><svg aria-hidden=\"true\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\"><path d=\"M4 6h16M7 12h10M10 18h4\"/></svg>Filters<span class=\"ontag\" id=\"fon\" hidden>On</span></button><p class=\"fsum\" id=\"fsum\"></p></div>" +
       "<div class=\"cols\"><div class=\"panel wm-card lp\" id=\"panel\" aria-label=\"Filter the calendar\"></div>" +
       "<div class=\"cal\"><div id=\"clashes\"></div>" +
-      "<div class=\"mbar\"><button type=\"button\" data-do=\"month\" data-by=\"-1\" data-fid=\"prev\" aria-label=\"Previous month\">&lt;</button><div id=\"mlabel\" aria-live=\"polite\"></div><button type=\"button\" data-do=\"month\" data-by=\"1\" data-fid=\"next\" aria-label=\"Next month\">&gt;</button></div>" +
-      "<div class=\"calwrap\"><div class=\"grid\" id=\"grid\"></div></div>" +
+      "<div class=\"caltile\"><div class=\"mbar\"><button type=\"button\" data-do=\"month\" data-by=\"-1\" data-fid=\"prev\" aria-label=\"Previous month\">&lt;</button><div id=\"mlabel\" aria-live=\"polite\"></div><button type=\"button\" data-do=\"month\" data-by=\"1\" data-fid=\"next\" aria-label=\"Next month\">&gt;</button></div>" +
+      "<div class=\"calwrap\"><div class=\"grid\" id=\"grid\"></div></div></div>" +
       "<div class=\"key\"><span><i class=\"dot\" aria-hidden=\"true\"></i>Booked</span><span><i class=\"dot waiting\" aria-hidden=\"true\"></i>Waiting on deposit</span><span><i class=\"keyq wm-card\" aria-hidden=\"true\"></i>Enquiry</span><span><i class=\"bang\" aria-hidden=\"true\">!</i>Clash</span></div></div>" +
       "<div class=\"list\" id=\"list\"></div></div>";
   },
@@ -148,7 +148,7 @@ function drawCal() {
   for (let c = 0; c < cells; c++) {
     const iso = addDays(start, c), p = dParts(iso), out = p.m !== m;
     const its = (!out && byDay.get(iso)) || [], clash = !out && S.clash.has(iso), q = its.find(i => !i.booking);
-    const cls = (out ? " out" : "") + (iso === today ? " today" : "");
+    const cls = (out ? " out" : "") + (iso === today ? " today" : "") + (its.some(i => i.kind === "booked") ? " booked" : "");      /* a booked day: the whole tile is green */
     if (P) {
       const inner = "<span class=\"num " + (its.length ? its[0].kind : "") + "\">" + p.d + "</span><span class=\"nm\">" + (its.length ? esc(its[0].short) + (its.length > 1 ? " +" + (its.length - 1) : "") : "") + "</span>";
       const bang = clash ? "<span class=\"bang\" role=\"img\" aria-label=\"Clash\">!</span>" : "";
