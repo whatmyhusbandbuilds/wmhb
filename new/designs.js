@@ -302,6 +302,42 @@ function dzRetry() {
   const said = Object.values(changed).map(c => c.boxes.join(" and ") + " in " + c.who + "’s brief " + (c.boxes.length > 1 ? "were" : "was") + " changed on another device, so that version is kept.");
   if (said.length) toast(said.join(" "));
 }
+/**
+ * Fresh data has come in: the boxes this phone hasn't typed in (not in dzTyped, not waiting in dzFailed, not the box being
+ * typed in) take the tracker's words, so a change made on another device shows here and is never saved back over by
+ * Generate. Gives back true if anything changed.
+ */
+function dzFollow() {
+  let moved = false;
+  Object.keys(S.dzDraft).forEach(row => {
+    const b = eventAt(+row), d = S.dzDraft[row]; if (!b) return;
+    const t = designOf(b), page = S.tab === "designs" && S.dz.row === +row && S.dz.page === "brief";
+    BRIEF_TEXT.forEach(key => {
+      const id = row + "|" + key, el = page ? $("#dz-brief [data-key=" + key + "]") : null;
+      if (dzTyped.has(id) || dzFailed.has(id) || (el && el === document.activeElement)) return;
+      const v = txt(t[key]) || (key === "defaultWording" ? WORDING : key === "thanksWording" ? THANKS : "");
+      if (d[key] === v) return;
+      d[key] = v; moved = true; if (el) el.value = v;
+    });
+  });
+  return moved;
+}
+/* A box that had focus when fresh data came in and is left without typing catches up with the tracker now. (Typed words
+   fire "change" first, which saves them.) */
+document.addEventListener("focusout", e => {
+  const el = e.target, b = S.tab === "designs" && S.data && el.matches && el.matches("#dz-brief [data-key]") ? dzClient() : null; if (!b) return;
+  const key = el.dataset.key, id = b.row + "|" + key, d = dzDraftOf(b), shown = key === "notes" ? el.value.trim() : el.value.replace(/\s+/g, " ").trim();
+  if (dzTyped.has(id) || dzFailed.has(id) || shown !== d[key]) return;
+  const v = txt(designOf(b)[key]) || (key === "defaultWording" ? WORDING : key === "thanksWording" ? THANKS : "");
+  if (d[key] !== v) { d[key] = v; el.value = v; }
+});
+/** Fresh data has come in (app.js): the untouched boxes follow the tracker, the waiting ones are tried again, and a wheel
+    or opened style on screen is drawn again if its client's brief has changed, so its pictures show the new words. */
+function dzFresh() {
+  const b = S.tab === "designs" && S.dz.page !== "brief" ? dzClient() : null, was = b ? JSON.stringify(S.dzDraft[b.row] || null) : "";
+  dzFollow(); dzRetry();
+  if (b && JSON.stringify(S.dzDraft[b.row] || null) !== was) { const y = scrollY; go("designs"); scrollTo(0, y); }
+}
 document.addEventListener("change", e => {
   const el = e.target, b = S.tab === "designs" && S.data ? dzClient() : null; if (!b) return;
   if (el.id === "dz-file") { const file = el.files && el.files[0]; el.value = ""; if (file) dzAddPhoto(b.row, file); return; }
