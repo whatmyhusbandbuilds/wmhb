@@ -442,4 +442,7 @@ function reloadSoon() {
 }
 dlg.addEventListener("close", () => setTimeout(reloadSoon, 0));
 document.addEventListener("focusout", () => setTimeout(reloadSoon, 400));
+/* Phone: the pinned top bar gets its hairline once the page has scrolled under it (app.css). */
+const markScrolled = () => document.documentElement.classList.toggle("scrolled", scrollY > 0);
+addEventListener("scroll", markScrolled, { passive: true }); markScrolled();
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkVersion(); });

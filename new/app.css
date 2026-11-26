@@ -86,6 +86,16 @@ h1,h2,h3,p{margin:0}
 .head{padding:calc(20px + env(safe-area-inset-top)) 20px 12px}
 .bar{display:flex;justify-content:space-between;align-items:center}
 .bar .l{display:flex;align-items:center;gap:10px}
+/* Phone: the top bar (menu button, logo, Refresh) stays at the top of the screen while the page scrolls under it.
+   It is lifted out of the page and the header keeps its 44 px for it, so nothing else moves. Behind it is the page's
+   own background (the dark base and the glow), so it looks the same until the page scrolls; then a hairline shows
+   under it. It sits above the page and the wheels, below the side menu (41), its scrim (40), toasts (60) and sheets. */
+@media (max-width:999px){
+  .bar.ph{position:fixed;left:0;right:0;top:0;z-index:30;height:calc(64px + env(safe-area-inset-top));padding:calc(20px + env(safe-area-inset-top)) 20px 0;background:radial-gradient(120% 420px at 50% 0,rgba(241,194,45,.07),transparent 70%),#121110;transition:box-shadow 200ms ease}
+  .head{padding-top:calc(64px + env(safe-area-inset-top))}
+  .scrolled .bar.ph{box-shadow:0 1px 0 var(--line)}
+  html{scroll-padding-top:calc(76px + env(safe-area-inset-top))}            /* a box brought into view lands below the bar, not under it */
+}
 .mbtn{width:44px;height:44px;margin-left:-10px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:4px;background:transparent}
 .mbtn svg,.xbtn svg{fill:none;stroke:var(--text);stroke-width:2.2;stroke-linecap:round}
 .logo{color:var(--yellow);line-height:1}
@@ -595,6 +605,7 @@ h1.dzn{margin:16px 0 0;font-size:30px;letter-spacing:-.04em;line-height:1}
 .dhint{margin:0;padding:16px 20px 0;font-size:14px;color:var(--mute);line-height:1.4}
 .cf{position:relative;display:grid;justify-items:center;align-items:center;padding:16px 0 24px;overflow:hidden;touch-action:pan-y;-webkit-user-select:none;user-select:none;cursor:grab}
 @supports (overflow:clip){.cf{overflow-x:clip;overflow-y:visible}}
+.cf{isolation:isolate}                 /* not from the kit: keeps the cards' z-index (80 to 100, from cfStyle) inside the wheel, so the side menu and the top bar stay above it */
 .cf>*{grid-area:1/1;width:190px}
 .cf.cf-mv{cursor:grabbing}
 .cf.cf-mv>*{will-change:transform,opacity,filter}
