@@ -26,11 +26,13 @@ const pickOf = (b, side) => styleIndex(designOf(b)[side]);
 const whose = b => withoutBrackets(b.client) + "'s";
 
 /* ---------- the brief on screen ---------- */
+/** What a brief box shows for what the tracker holds: the usual wording in the two wording boxes when it holds none. */
+const briefShown = (key, held) => txt(held) || (key === "defaultWording" ? WORDING : key === "thanksWording" ? THANKS : "");
 /** The brief as it is being written. It starts from the tracker, with the usual wording in the two wording boxes. */
 function dzDraftOf(b) {
   if (!S.dzDraft[b.row]) {
     const d = designOf(b);
-    S.dzDraft[b.row] = { names: txt(d.names), line2: txt(d.line2), defaultWording: txt(d.defaultWording) || WORDING, thanksWording: txt(d.thanksWording) || THANKS, colours: colourList(d.colours), notes: txt(d.notes) };
+    S.dzDraft[b.row] = { names: txt(d.names), line2: txt(d.line2), defaultWording: briefShown("defaultWording", d.defaultWording), thanksWording: briefShown("thanksWording", d.thanksWording), colours: colourList(d.colours), notes: txt(d.notes) };
   }
   return S.dzDraft[b.row];
 }
@@ -270,12 +272,13 @@ async function dzSaveBrief(row, key) {
     });
   const id = row + "|" + key, now = eventAt(row);
   if (saved === true) { dzFailed.delete(id); dzTyped.delete(id); }
+  else if (saved === false && key === "colours") dzTyped.delete(id);          /* the chips went back to what the tracker has */
   else if (saved === false && BRIEF_TEXT.includes(key) && now) dzFailed.set(id, txt(designOf(now)[key]));    /* colour chips go back when they fail, so only typed words wait */
 }
 /** The typed boxes of the brief, the parts a failed save keeps on screen. */
 const BRIEF_TEXT = ["names", "line2", "defaultWording", "thanksWording", "notes"];
 /** The typed parts of the brief that the tracker doesn't have yet (a save failed). The usual wording, left as it came, doesn't count. */
-const dzUnsaved = b => { const d = S.dzDraft[b.row], t = designOf(b); return d ? BRIEF_TEXT.filter(k => d[k] !== txt(t[k]) && !(!txt(t[k]) && d[k] === (k === "defaultWording" ? WORDING : k === "thanksWording" ? THANKS : ""))) : []; };
+const dzUnsaved = b => { const d = S.dzDraft[b.row], t = designOf(b); return d ? BRIEF_TEXT.filter(k => d[k] !== txt(t[k]) && d[k] !== briefShown(k, t[k])) : []; };
 /** The failed boxes that are still waiting: the tracker doesn't have what was typed. Boxes it now has, or whose booking is gone, drop out. */
 function dzWaiting() {
   return [...dzFailed.keys()].filter(k => { const [row, key] = k.split("|"), b = S.data && eventAt(+row); if (b && dzUnsaved(b).includes(key)) return true; dzFailed.delete(k); return false; });
@@ -288,37 +291,43 @@ const BOX_NAME = Object.fromEntries(BRIEF_BOXES.concat([["notes", "Notes from th
  * Once the rest land, the app can reload (app.js).
  */
 function dzRetry() {
-  if (!S.data) return;
+  const rows = new Set(); if (!S.data) return rows;
   const changed = {};
   dzWaiting().forEach(id => {
     const [row, key] = id.split("|"), b = eventAt(+row), now = txt(designOf(b)[key]);
     if (now === dzFailed.get(id)) { dzSaveBrief(+row, key); return; }
     dzFailed.delete(id); dzTyped.delete(id);
-    const d = S.dzDraft[row]; d[key] = now || (key === "defaultWording" ? WORDING : key === "thanksWording" ? THANKS : "");
+    const d = S.dzDraft[row]; d[key] = briefShown(key, now); rows.add(row);
     const el = S.tab === "designs" && S.dz.row === +row ? $("#dz-brief [data-key=" + key + "]") : null;
     if (el && el !== document.activeElement) el.value = d[key];                 /* a box being typed in again keeps the newest typing */
     (changed[row] = changed[row] || { who: b.client, boxes: [] }).boxes.push("“" + BOX_NAME[key] + "”");
   });
   const said = Object.values(changed).map(c => c.boxes.join(" and ") + " in " + c.who + "’s brief " + (c.boxes.length > 1 ? "were" : "was") + " changed on another device, so that version is kept.");
   if (said.length) toast(said.join(" "));
+  return rows;
 }
 /**
  * Fresh data has come in: the boxes this phone hasn't typed in (not in dzTyped, not waiting in dzFailed, not the box being
- * typed in) take the tracker's words, so a change made on another device shows here and is never saved back over by
- * Generate. Gives back true if anything changed.
+ * typed in) take the tracker's words, and the colour chips take its colours unless they were tapped here and not saved
+ * yet, so a change made on another device shows here and is never saved back over by Generate. Gives back the rows changed.
  */
 function dzFollow() {
-  let moved = false;
+  const moved = new Set();
   Object.keys(S.dzDraft).forEach(row => {
     const b = eventAt(+row), d = S.dzDraft[row]; if (!b) return;
     const t = designOf(b), page = S.tab === "designs" && S.dz.row === +row && S.dz.page === "brief";
     BRIEF_TEXT.forEach(key => {
       const id = row + "|" + key, el = page ? $("#dz-brief [data-key=" + key + "]") : null;
       if (dzTyped.has(id) || dzFailed.has(id) || (el && el === document.activeElement)) return;
-      const v = txt(t[key]) || (key === "defaultWording" ? WORDING : key === "thanksWording" ? THANKS : "");
+      const v = briefShown(key, t[key]);
       if (d[key] === v) return;
-      d[key] = v; moved = true; if (el) el.value = v;
+      d[key] = v; moved.add(row); if (el) el.value = v;
     });
+    const held = colourList(t.colours);
+    if (!dzTyped.has(row + "|colours") && held.join(", ") !== d.colours.join(", ")) {
+      d.colours = held; moved.add(row);
+      if (S.tab === "designs" && S.dz.row === +row) { drawColours(b); syncPalette(); }
+    }
   });
   return moved;
 }
@@ -328,15 +337,15 @@ document.addEventListener("focusout", e => {
   const el = e.target, b = S.tab === "designs" && S.data && el.matches && el.matches("#dz-brief [data-key]") ? dzClient() : null; if (!b) return;
   const key = el.dataset.key, id = b.row + "|" + key, d = dzDraftOf(b), shown = key === "notes" ? el.value.trim() : el.value.replace(/\s+/g, " ").trim();
   if (dzTyped.has(id) || dzFailed.has(id) || shown !== d[key]) return;
-  const v = txt(designOf(b)[key]) || (key === "defaultWording" ? WORDING : key === "thanksWording" ? THANKS : "");
+  const v = briefShown(key, designOf(b)[key]);
   if (d[key] !== v) { d[key] = v; el.value = v; }
 });
 /** Fresh data has come in (app.js): the untouched boxes follow the tracker, the waiting ones are tried again, and a wheel
     or opened style on screen is drawn again if its client's brief has changed, so its pictures show the new words. */
 function dzFresh() {
-  const b = S.tab === "designs" && S.dz.page !== "brief" ? dzClient() : null, was = b ? JSON.stringify(S.dzDraft[b.row] || null) : "";
-  dzFollow(); dzRetry();
-  if (b && JSON.stringify(S.dzDraft[b.row] || null) !== was) { const y = scrollY; go("designs"); scrollTo(0, y); }
+  const b = S.tab === "designs" && S.dz.page !== "brief" ? dzClient() : null, changed = dzFollow();
+  dzRetry().forEach(row => changed.add(row));
+  if (b && changed.has(String(b.row))) { const y = scrollY; go("designs"); scrollTo(0, y); }
 }
 document.addEventListener("change", e => {
   const el = e.target, b = S.tab === "designs" && S.data ? dzClient() : null; if (!b) return;
@@ -363,6 +372,7 @@ async function dzGenerate() {
   dzGo("styles", "fwd");
   const ok = !!(await saved), now = eventAt(row);
   /* it didn't save: only the boxes typed in on this phone wait to be tried again, not ones another device changed */
+  if (ok) dzTyped.delete(row + "|colours");
   BRIEF_TEXT.forEach(key => { const id = row + "|" + key; if (ok) { dzFailed.delete(id); dzTyped.delete(id); } else if (now && dzTyped.has(id) && !dzFailed.has(id) && dzUnsaved(now).includes(key)) dzFailed.set(id, txt(designOf(now)[key])); });
   if (!ok && S.tab === "designs" && S.dz.row === row && S.dz.page !== "brief") dzGo("brief", "back");      /* it didn't save: back to the brief, which still holds what was typed */
 }
@@ -490,7 +500,7 @@ Object.assign(TAPS, {
     const b = dzClient(); if (!b) return;
     const d = dzDraftOf(b), name = el.dataset.name, had = d.colours.some(n => sameWords(n, name));
     d.colours = had ? d.colours.filter(n => !sameWords(n, name)) : d.colours.concat([name]);
-    el.setAttribute("aria-pressed", !had); drawColours(b); dzSaveBrief(b.row, "colours");
+    el.setAttribute("aria-pressed", !had); drawColours(b); dzTyped.add(b.row + "|colours"); dzSaveBrief(b.row, "colours");
   },
   "dz-photo": () => { const pick = $("#dz-file"); if (pick) pick.click(); },
   "dz-photos-again": () => { const b = dzClient(); if (b) { dzLoadPhotos(b, true); drawPhotos(b); } },
