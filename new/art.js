@@ -148,10 +148,10 @@ let fitHost = null;
  * [data-fit] is one line (or lines split with <br>) that must fit across its [data-box]. [data-fitbox] is a block that must fit inside its parent.
  */
 /*
- * Nothing that goes into a picture may use a CSS transform. Safari ignores transforms inside a picture made from HTML
- * (shot() below), so a sticker shrunk with one came out at full size and cut off on the iPhone. So: a screen shrinks
- * by its font size (everything in a screen is in em), and a sticker is laid out at its natural size and shrunk and
- * placed when it is drawn onto the canvas (fitSticker below).
+ * Everything that goes into a picture is laid out at its natural size, with no CSS transform (shot() refuses one).
+ * A screen shrinks by its font size (everything in a screen is in em); a sticker is laid out at its natural size and
+ * shrunk and placed when it is drawn onto the canvas (fitSticker below). The shrinking itself is only ever done by the
+ * canvas: see shot() for why.
  */
 function layOut(html, w, h, rootStyle) {
   if (!fitHost) {
@@ -284,15 +284,18 @@ const pngOf = canvas => new Promise((yes, no) => canvas.toBlob(blob => blob ? ye
 /**
  * Draws a piece of HTML, w × h px as laid out, onto a canvas outW × outH px.
  * swaps = pictures inside it: each on-page address is swapped for the picture itself.
+ * The SVG around the HTML is exactly w × h, with no viewBox: Safari (WebKit) ignores an SVG's own scaling for HTML
+ * inside it and paints the HTML 1:1, so a picture scaled that way showed only its top-left corner on the iPhone.
+ * All the scaling is done by drawImage, which draws the SVG sharp at any size.
  */
 async function shot(html, w, h, outW, outH, swaps) {
   const box = document.createElement("div");
   box.setAttribute("style", "position:relative;width:" + w + "px;height:" + h + "px;overflow:hidden;font-family:'Inter Tight',system-ui,sans-serif;font-weight:500;line-height:normal");
-  if (/[;"\s]transform\s*:/.test(html)) throw new Error("A picture can't use a CSS transform: Safari ignores it.");
+  if (/[;"\s]transform\s*:/.test(html)) throw new Error("A picture is laid out at its natural size, with no CSS transform: the canvas does the scaling.");
   let inner = "<style>*{box-sizing:border-box}" + await fontFor(html) + "</style>" + html;        /* the page's own sizing rule, so a piece measures the same in the file as on the page */
   for (const from of Object.keys(swaps || {})) inner = inner.split(from).join(swaps[from]);
   box.innerHTML = inner;
-  const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" + outW + "\" height=\"" + outH + "\" viewBox=\"0 0 " + w + " " + h + "\"><foreignObject x=\"0\" y=\"0\" width=\"" + w + "\" height=\"" + h + "\">" + new XMLSerializer().serializeToString(box) + "</foreignObject></svg>";
+  const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" + w + "\" height=\"" + h + "\"><foreignObject x=\"0\" y=\"0\" width=\"" + w + "\" height=\"" + h + "\">" + new XMLSerializer().serializeToString(box) + "</foreignObject></svg>";
   const src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg), canvas = canvasOf(outW, outH), ctx = canvas.getContext("2d");
   /* Safari can draw the first pass before the font inside the picture is ready, so there it is drawn twice */
   const passes = /apple/i.test(navigator.vendor || "") ? 2 : 1;
