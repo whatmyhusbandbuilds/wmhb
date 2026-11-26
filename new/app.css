@@ -695,3 +695,23 @@ h1.pcn{margin:16px 0 0;font-size:28px;letter-spacing:-.04em;line-height:1.05}
 @media (prefers-reduced-motion:reduce){
   .fold,.fold::before{transition:none!important}
 }
+
+/* Event day, Ready?: each of the seven is a box, red until Aadil ticks it, then green, swept across from its tick box
+   (the same green and the same sweep as a tick on the Designs wheel) */
+.rrows{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.rrows .rrow.rbox{overflow:hidden;padding:6px 12px;border:0;border-radius:12px;background:linear-gradient(180deg,#B8432F,#8C2C1F)}
+.rbox .rsweep{position:absolute;left:0;top:0;right:0;bottom:0;border-radius:inherit;background:linear-gradient(180deg,#43A56E,#2B764A);-webkit-clip-path:circle(0% at 24px 50%);clip-path:circle(0% at 24px 50%);transition:clip-path 220ms cubic-bezier(.23,1,.32,1),-webkit-clip-path 220ms cubic-bezier(.23,1,.32,1);pointer-events:none}
+.rbox.on .rsweep{-webkit-clip-path:circle(150% at 24px 50%);clip-path:circle(150% at 24px 50%);transition-duration:480ms}
+.rbox>.box,.rbox>.lab,.rbox>.from,.rbox>button{position:relative}
+.rrows .rbox.on .lab{color:var(--text)}
+.rrows .rbox .from{color:rgba(250,250,247,.8)}
+.rtick{flex-shrink:0;display:flex;align-items:center;justify-content:center;width:44px;height:44px;margin:-4px -10px;padding:0;border:0;background:transparent}
+.rgo{flex:1;min-width:0;min-height:44px;display:flex;align-items:center;gap:12px;padding:0;border:0;background:transparent;color:var(--text);font-family:var(--font);text-align:left}
+@media (prefers-reduced-motion:reduce){.rbox .rsweep{transition:none!important}}
+
+/* The app moves focus to a sheet's or a page's heading when it opens, for screen readers. That heading is not
+   something to tap, so it never shows an outline (Safari drew a white box round it). Buttons, links and boxes keep
+   their outline for anyone using a keyboard. */
+[tabindex="-1"]:focus,dialog:focus{outline:none}
+.ver{margin:16px 20px 0;font-size:12px;font-weight:600;color:var(--mute)}
+@media (min-width:1000px){.ver{margin:16px 0 0}}

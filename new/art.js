@@ -147,31 +147,57 @@ let fitHost = null;
  * Gives back the HTML with the new sizes written in, so it looks the same at any size afterwards.
  * [data-fit] is one line (or lines split with <br>) that must fit across its [data-box]. [data-fitbox] is a block that must fit inside its parent.
  */
-function fitted(html, w, h, rootStyle, room, from) {
+/*
+ * Nothing that goes into a picture may use a CSS transform. Safari ignores transforms inside a picture made from HTML
+ * (shot() below), so a sticker shrunk with one came out at full size and cut off on the iPhone. So: a screen shrinks
+ * by its font size (everything in a screen is in em), and a sticker is laid out at its natural size and shrunk and
+ * placed when it is drawn onto the canvas (fitSticker below).
+ */
+function layOut(html, w, h, rootStyle) {
   if (!fitHost) {
     fitHost = document.createElement("div"); fitHost.setAttribute("aria-hidden", "true");
     fitHost.style.cssText = "position:absolute;left:-30000px;top:0;visibility:hidden;pointer-events:none";
     document.body.appendChild(fitHost);
   }
   fitHost.innerHTML = "<div style=\"position:relative;box-sizing:border-box;width:" + w + "px;height:" + h + "px;overflow:hidden;" + rootStyle + "\">" + html + "</div>";
-  const root = fitHost.firstChild, inside = el => { const cs = getComputedStyle(el); return [el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), el.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)]; };
+  const root = fitHost.firstChild;
   $$("[data-fit]", root).forEach(el => {
     el.style.whiteSpace = "nowrap";
     const range = document.createRange(); range.selectNodeContents(el);
     const wide = range.getBoundingClientRect().width, avail = inside(el.closest("[data-box]") || root)[0];
     if (wide > avail && wide > 0) el.style.fontSize = (parseFloat(getComputedStyle(el).fontSize) * avail / wide * 0.99 / parseFloat(getComputedStyle(el.parentElement).fontSize)).toFixed(4) + "em";
   });
+  return root;
+}
+/** The room inside a box, less its padding. */
+const inside = el => { const cs = getComputedStyle(el); return [el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), el.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)]; };
+/** A screen, with anything too big for it shrunk by its font size. Gives back the HTML with the sizes written in. */
+function fitted(html, w, h, rootStyle, room) {
+  const root = layOut(html, w, h, rootStyle);
   $$("[data-fitbox]", root).forEach(el => {
     const r = el.getBoundingClientRect(), box = inside(el.parentElement), s = Math.min(1, box[0] * room / r.width, box[1] * room / r.height);
-    if (!from) { if (s < 1) el.style.transform = "scale(" + s.toFixed(4) + ")"; return; }
-    /* a sticker: it shrinks towards its starting line, then moves so its first (or last) row of letters sits on that line */
-    const nudge = inkGap(el, from) * s;
-    el.style.transformOrigin = from === "top" ? "50% 0" : "50% 100%";
-    el.style.transform = (nudge ? "translateY(" + (from === "top" ? -nudge : nudge).toFixed(2) + "px) " : "") + (s < 1 ? "scale(" + s.toFixed(4) + ")" : "");
+    if (s < 1) el.style.fontSize = s.toFixed(4) + "em";
   });
   const out = root.innerHTML; fitHost.innerHTML = "";
   return out;
 }
+/** What a sticker's wording inherits from its zone, inside a picture as on the page. */
+const STICKER_TEXT = "line-height:1.05;font-size:16px;text-align:center;";
+/**
+ * A sticker, laid out at its natural size: { html, w, h } is the sticker itself, and x, y and s say where it goes in its
+ * zone (zone px) and how much it shrinks to fit (1 = not at all). It shrinks towards its starting line, and its first
+ * (or last) row of letters sits on the 50 mm line.
+ */
+function fitSticker(html, which) {
+  const z = zoneBox(which), st = STICKERS[which], root = layOut(zoneInner(html), z.w, z.h, zoneCss(which));
+  const el = root.firstChild, r = el.getBoundingClientRect(), box = inside(root);
+  const s = Math.min(1, box[0] * 0.96 / r.width, box[1] * 0.96 / r.height), gap = inkGap(el, st.from) * s, pad = (st.start - st.gap) * MM;
+  const out = { html: el.outerHTML, w: r.width, h: r.height, s, x: (z.w - r.width * s) / 2, y: st.from === "top" ? pad - gap : z.h - pad - r.height * s + gap };
+  fitHost.innerHTML = "";
+  return out;
+}
+/** A sticker drawn on its own, at its natural size times k times its shrink. Draw it at (x, y) in the zone, s times its size. */
+const stickerShot = (st, k, swaps) => { const W = Math.ceil(st.w), H = Math.ceil(st.h); return shot("<div style=\"" + STICKER_TEXT + "\">" + st.html + "</div>", W, H, Math.max(1, Math.ceil(W * st.s * k)), Math.max(1, Math.ceil(H * st.s * k)), swaps); };
 const ZONE_STYLE = "display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.05;font-size:16px;";
 /** A sticker's box: its wording starts at the vinyl's starting line and builds away from the frame edge it is measured from. */
 const zoneCss = which => { const z = STICKERS[which], pad = ((z.start - z.gap) * MM).toFixed(2) + "px;"; return ZONE_STYLE + (z.from === "top" ? "justify-content:flex-start;padding-top:" : "justify-content:flex-end;padding-bottom:") + pad; };
@@ -210,8 +236,8 @@ function artFor(brief) {
       const s = style.screen(kind, brief);
       screens[kind] = s.image ? { image: s.image } : { bg: s.bg, html: fitted(s.html, 1000, 562.5, "font-size:10px;line-height:1.1;", 0.96) };
     });
-    const stickers = style.board(brief), fit = which => fitted(zoneInner(stickers[which]), zoneBox(which).w, zoneBox(which).h, zoneCss(which), 0.96, STICKERS[which].from);
-    return { screens, top: fit("top"), bottom: fit("bottom") };
+    const stickers = style.board(brief);
+    return { screens, top: fitSticker(stickers.top, "top"), bottom: fitSticker(stickers.bottom, "bottom") };
   });
 }
 
@@ -262,6 +288,7 @@ const pngOf = canvas => new Promise((yes, no) => canvas.toBlob(blob => blob ? ye
 async function shot(html, w, h, outW, outH, swaps) {
   const box = document.createElement("div");
   box.setAttribute("style", "position:relative;width:" + w + "px;height:" + h + "px;overflow:hidden;font-family:'Inter Tight',system-ui,sans-serif;font-weight:500;line-height:normal");
+  if (/[;"\s]transform\s*:/.test(html)) throw new Error("A picture can't use a CSS transform: Safari ignores it.");
   let inner = "<style>*{box-sizing:border-box}" + await fontFor(html) + "</style>" + html;        /* the page's own sizing rule, so a piece measures the same in the file as on the page */
   for (const from of Object.keys(swaps || {})) inner = inner.split(from).join(swaps[from]);
   box.innerHTML = inner;
@@ -309,14 +336,14 @@ async function screenPng(piece, swaps) {
 }
 /** One sticker as a PNG at its print size, on a see-through background. */
 async function stickerPng(art, which, swaps) {
-  const z = zoneBox(which), px = mm => Math.round(mm / 25.4 * PRINT_DPI);
-  return pngOf(await shot("<div style=\"position:absolute;inset:0;overflow:hidden;" + zoneCss(which) + "\">" + art[which] + "</div>", z.w, z.h, px(STICKERS[which].w), px(STICKERS[which].h), swaps));
+  const z = zoneBox(which), st = art[which], px = mm => Math.round(mm / 25.4 * PRINT_DPI), canvas = canvasOf(px(STICKERS[which].w), px(STICKERS[which].h)), q = canvas.width / z.w;
+  const flat = await stickerShot(st, q, swaps);
+  canvas.getContext("2d").drawImage(flat, st.x * q, st.y * q, Math.ceil(st.w) * st.s * q, Math.ceil(st.h) * st.s * q); freeCanvas(flat);
+  try { return await pngOf(canvas); } finally { freeCanvas(canvas); }
 }
 const freeCanvas = c => { if (c) { c.width = 0; c.height = 0; } };          /* gives a canvas's memory back straight away (phones keep it otherwise) */
 const boardPhotos = {};
 const boardPhoto = view => boardPhotos[view] || (boardPhotos[view] = loadImage("assets/board-" + view + ".jpg").catch(x => { delete boardPhotos[view]; throw x; }));
-/** One sticker drawn flat, at about the resolution it is needed at. */
-const stickerFlat = (art, which, k, swaps) => { const z = zoneBox(which); return shot("<div style=\"position:absolute;inset:0;overflow:hidden;" + zoneCss(which) + "\">" + art[which] + "</div>", z.w, z.h, Math.ceil(z.w * k), Math.ceil(z.h * k), swaps); };
 /** Where a point of a sticker's zone lands on a picture of the board, k = the picture's px per plane px. */
 const onPlane = (view, which, k) => { const z = zoneBox(which); return (x, y) => (view === "angle" ? through(M_ANGLE, z.x + x, z.y + y) : [z.x + x, z.y + y]).map(v => v * k); };
 /**
@@ -332,8 +359,8 @@ async function boardCanvas(art, view, screen, outW, outH, swaps, print) {
   }
   const ink = canvasOf(outW, outH), ictx = ink.getContext("2d");
   for (const which of ["top", "bottom"]) {
-    const z = zoneBox(which), flat = await stickerFlat(art, which, fine, swaps);
-    warp(ictx, flat, z.w, z.h, onPlane(view, which, k)); freeCanvas(flat);
+    const st = art[which], flat = await stickerShot(st, fine, swaps), place = onPlane(view, which, k);
+    warp(ictx, flat, Math.ceil(st.w) * st.s, Math.ceil(st.h) * st.s, (x, y) => place(st.x + x, st.y + y)); freeCanvas(flat);
   }
   if (print) ctx.globalCompositeOperation = "multiply";
   ctx.drawImage(ink, 0, 0); ctx.globalCompositeOperation = "source-over"; freeCanvas(ink);
