@@ -333,7 +333,7 @@ async function boardPng(art, view, screen, swaps) {
  * Gives back "shared", "saved", "stopped" (they closed the share sheet) or "blocked" (the phone wants a fresh tap first).
  */
 async function handOver(files) {
-  const list = files.map(f => new File([f.blob], f.name, { type: "image/png" }));
+  const list = files.map(f => new File([f.blob], f.name, { type: f.blob.type || "image/png" }));
   if (matchMedia("(pointer:coarse)").matches && navigator.canShare && navigator.canShare({ files: list })) {
     try { await navigator.share({ files: list }); return "shared"; }
     catch (x) { return x && x.name === "AbortError" ? "stopped" : "blocked"; }
