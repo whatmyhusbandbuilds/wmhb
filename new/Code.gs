@@ -1,31 +1,73 @@
 /**
  * wmhb app 2: the back end for the new wmhb app (the /new/ page).
  *
- * It reads the new tracker, "wmhb tracker (new layout)", and nothing else.
+ * It reads the new tracker, "wmhb tracker (new layout) v3", and nothing else.
  *
  * What it may write
- *   - Clients and Money tabs: only the typed columns in CLIENT_FIELDS and MONEY_FIELDS.
+ *   - Clients, Money, Event day and Designs tabs: only the typed columns named in the
+ *     lists below (CLIENT_FIELDS, MONEY_FIELDS, EVENT_FIELDS, BRIEF_FIELDS and so on).
+ *   - Payments and Expenses tabs: a new row in the next empty row.
  *   - Enquiries tab: a new row from the public form, and the Status, What happened
  *     and Booking ID cells.
+ *   - Google Drive: a brief photo, into the client's own folder inside the designs folder
+ *     ("07 Client Designs", script property DESIGNS_FOLDER). The client's folder is named like the
+ *     invoice folders, "005, Pearl", and is made the first time a photo is added.
  *
  * What it never does
  *   - write to a cell that holds a formula (the grey "auto" columns),
- *   - sort, insert or delete rows on Clients, Money, Event day, Videos or Designs,
- *   - open any other spreadsheet.
+ *   - write to Received or Bond on the Money tab (a payment is a row on Payments),
+ *   - sort, insert or delete rows on Clients, Money, Event day, Videos, Designs,
+ *     Payments or Expenses,
+ *   - open any other spreadsheet,
+ *   - write anything to Google Drive outside the designs folder. The client videos folders
+ *     ("06 Client Videos") are Aadil's alone: the app only links to them.
  *
  * The key is NOT in this file. Run setUp once from the editor. It makes a key and
  * keeps it in Project Settings > Script properties, under KEY.
  */
 
-const SHEET_ID = '1sWMN4SVJjF8PUWpxCbGCW6ywbYjZUQVnarJlL2ea6Gs';
-const TAB = { clients: 'Clients', money: 'Money', enquiries: 'Enquiries', settings: 'Settings', prices: 'Prices' };
+const SHEET_ID = '1uH_ZXGwWNP-M9AYiWtVUs9VqZyJ4NB7fu_d--PQtoDo';
+const TAB = {
+  clients: 'Clients', enquiries: 'Enquiries', money: 'Money', payments: 'Payments', expenses: 'Expenses',
+  eventDay: 'Event day', videos: 'Videos', designs: 'Designs', prices: 'Prices', settings: 'Settings'
+};
 const LAST_BOOKING_ROW = 504;                 // bookings live in rows 5 to 504
+const NEXT_INVOICE_CELL = 'C28';              // on the Settings tab
 const NEXT_BOOKING_ID_CELL = 'C29';           // on the Settings tab
+const REPORTS_RANGE = 'AC5:AH5';              // on the Money tab, used if the report headings can't be found
 const ENQUIRY_LIMIT_PER_HOUR = 15;
 const LOCK_WAIT_MS = 20000;
+const PHOTO_MAX_CHARS = 4000000;              // about 3 MB once decoded
+const PHOTOS_SHOWN = 12;
 
 const ENQUIRY_STATUSES = ['New', 'Waiting on response', 'Waiting on deposit', 'Cancelled'];
-const ENQUIRY_HEADINGS = ['Received', 'Name', 'Instagram or phone', 'Event type', 'Event date', 'Message', 'Status', 'What happened', 'Booking ID'];
+const PACKING = ['Top board', 'Bottom board', 'Base', 'Laptop and charger', 'Camera', 'Monitor', 'Light',
+  'Vintage phone', 'Speaker', 'Cable box', '10 m extension cord', 'Table message cards'];
+
+/* Used only if the list is missing from the Settings tab. */
+const SPARE_LISTS = {
+  'Yes': ['Yes'],
+  'Payment type': ['Hire', 'Bond in', 'Bond back'],
+  'Expense type': ['Equipment', 'Running costs', 'Marketing', 'Software', 'Contractor']
+};
+
+/* Every heading the app looks for, tab by tab. checkTracker lists any that are missing. */
+const HEADINGS = {
+  'Clients': ['Booking ID', 'Client name', 'Event date', 'Status', 'Next step', 'Phone', 'Email', 'Instagram', 'How they found us',
+    'Referred by', 'Event type', 'Venue', 'Suburb', 'Region', 'Package', 'Cancelled', 'Notes'],
+  'Enquiries': ['Received', 'Name', 'Instagram or phone', 'Event type', 'Event date', 'Message', 'Status', 'What happened', 'Booking ID'],
+  'Money': ['Booking ID', 'Custom price', 'Highlight reel', 'Custom board and screen', 'No power point', 'Second event', 'Host hours',
+    'Extra hours', 'Extra days', 'Travel fee', 'Discount', 'Package price', 'Extras', 'Total', 'Received', 'Owing', 'Invoice no.',
+    'Bond', 'Costs logged', 'Other costs', 'Profit'],
+  'Payments': ['Date', 'Invoice no.', 'Client', 'Amount', 'What', 'Paid by or a note'],
+  'Expenses': ['Date', 'What', 'Type', 'Amount', 'Invoice no.', 'Client', 'Notes'],
+  'Event day': ['Booking ID', 'Hours', 'Power point', 'Setup time', 'Start time', 'Who is running it', 'Venue confirmed', 'Power sorted',
+    'Packed', 'Packed items', 'Day notes'],
+  'Videos': ['Booking ID', 'Guest messages', 'Videos sent', 'Drive folder link', 'Link ends', 'Clips OK to share', 'OK to send offers', 'Review'],
+  'Designs': ['Booking ID', 'Custom board?', 'Board design', 'Screen design', 'Canva link', 'Sticker printed', 'Names or title', 'Second line',
+    'Default screen wording', 'Thank you wording', 'Theme colours', 'Brief notes', 'Photos link', 'Styles made on']
+};
+const REPORTS = { income: 'Income', expenses: 'Expenses', profit: 'Profit', expected: 'Expected income', bondsHeld: 'Bonds held', bank: 'Should be in the bank' };
 
 /* The only columns this app may write to, and what each one accepts. */
 const CLIENT_FIELDS = {
@@ -37,6 +79,15 @@ const MONEY_FIELDS = {
   'Custom price': 'num', 'Highlight reel': 'yes', 'Custom board and screen': 'yes', 'No power point': 'yes',
   'Second event': 'yes', 'Host hours': 'num', 'Extra hours': 'num', 'Extra days': 'num', 'Travel fee': 'num',
   'Discount': 'num'
+};
+const PAYMENT_FIELDS = { 'Date': 'date', 'Invoice no.': 'text', 'Amount': 'num', 'What': 'list:Payment type', 'Paid by or a note': 'text' };
+const EXPENSE_FIELDS = { 'Date': 'date', 'What': 'text', 'Type': 'list:Expense type', 'Amount': 'num', 'Invoice no.': 'text', 'Notes': 'text' };
+const EVENT_FIELDS = { 'Setup time': 'time', 'Start time': 'time', 'Who is running it': 'text', 'Venue confirmed': 'yes', 'Power sorted': 'yes' };
+const DESIGN_TICKS = { 'Sticker printed': 'yes' };      // ticked on the Event day screen, kept on the Designs tab
+/* The brief, as the app names each part, and the Designs column it is kept in. */
+const BRIEF_FIELDS = {
+  names: 'Names or title', line2: 'Second line', defaultWording: 'Default screen wording', thanksWording: 'Thank you wording',
+  colours: 'Theme colours', notes: 'Brief notes'
 };
 
 /* The public form's event types, as the Settings tab spells them. */
@@ -60,8 +111,12 @@ function setUp() {
   }
   MailApp.getRemainingDailyQuota();           // asks for permission to send the new-enquiry email
   book_().getName();                          // asks for permission to open the tracker
+  DriveApp.getRootFolder().getName();         // asks for permission to save brief photos to Drive
   console.log('Your key (treat it like a password): ' + key);
   console.log('New-enquiry emails go to: ' + (props.getProperty('ALERT_TO') || 'nobody yet. Add a script property called ALERT_TO.'));
+  console.log('Main client videos folder: ' + (props.getProperty('VIDEOS_FOLDER') ? 'set.' : 'not set yet. Add a script property called VIDEOS_FOLDER holding the folder link.'));
+  console.log('Client designs folder: ' + (props.getProperty('DESIGNS_FOLDER') ? 'set.' : 'not set yet. Add a script property called DESIGNS_FOLDER holding the link to 07 Client Designs.'));
+  checkTracker();
 }
 
 /** Run this to lock out an old link. It makes a new key and shows it in the Execution log. */
@@ -70,26 +125,50 @@ function newKey() {
   setUp();
 }
 
+/** Run this to see whether the tracker has every tab and heading the app needs. It changes nothing. */
+function checkTracker() {
+  const found = [];
+  try { read_(null, found); } catch (err) { found.push(String((err && err.message) || err)); }
+  if (!found.length) console.log('The tracker has every tab and heading the app needs.');
+  found.forEach(line => console.log('Check: ' + line));
+  return found;
+}
+
 /* ---------- the web app ---------- */
 
 function doGet() {
   return ContentService.createTextOutput('wmhb app 2 is running.');
 }
 
+/** Reads need the key. Changes need the key and are done one at a time. */
+const READS = {
+  getData: () => ({ data: read_() }),
+  getBriefPhotos: arg => getBriefPhotos_(arg)
+};
+const CHANGES = {
+  setEnquiryStatus: arg => setEnquiryStatus_(arg),
+  addBooking: arg => addBooking_(arg),
+  addPayment: arg => addPayment_(arg),
+  addExpense: arg => addExpense_(arg),
+  setEventDay: arg => setEventDay_(arg),
+  setPacking: arg => setPacking_(arg),
+  saveBrief: arg => saveBrief_(arg),
+  addBriefPhoto: arg => addBriefPhoto_(arg),
+  setDesignPick: arg => setDesignPick_(arg)
+};
+const has_ = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+
 /** The page on GitHub talks to the tracker through here. Body: {k, fn, arg} as JSON text. */
 function doPost(e) {
   try {
     const request = JSON.parse(e.postData.contents);
-    const arg = request.arg || {};
-    if (request.fn === 'enquire') return json_({ ok: true, result: enquire_(arg) });
+    const arg = request.arg || {}, fn = String(request.fn);
+    if (fn === 'enquire') return json_({ ok: true, result: enquire_(arg) });
 
     requireKey_(request.k);
-    switch (request.fn) {
-      case 'getData': return json_({ ok: true, result: { data: read_() } });
-      case 'setEnquiryStatus': return json_({ ok: true, result: withLock_(() => setEnquiryStatus_(arg)) });
-      case 'addBooking': return json_({ ok: true, result: withLock_(() => addBooking_(arg)) });
-      default: throw new Error('Unknown request.');
-    }
+    if (has_(READS, fn)) return json_({ ok: true, result: READS[fn](arg) });
+    if (has_(CHANGES, fn)) return json_({ ok: true, result: withLock_(() => CHANGES[fn](arg)) });
+    throw new Error('Unknown request.');
   } catch (err) {
     return json_({ ok: false, error: String((err && err.message) || err) });
   }
@@ -120,6 +199,7 @@ function withLock_(work) {
 
 let book;                                     // opened once per request
 const tabs = {};
+const headRows = {};                          // each tab's heading row, looked up once per request
 
 function book_() {
   if (!book) book = SpreadsheetApp.openById(SHEET_ID);
@@ -129,37 +209,60 @@ function book_() {
 function tab_(name) {
   if (!tabs[name]) {
     tabs[name] = book_().getSheetByName(name);
-    if (!tabs[name]) throw new Error('The "' + name + '" tab is missing from the tracker.');
+    if (!tabs[name]) throw new Error('The "' + name + '" tab is missing from the tracker. Tell Aadil.');
   }
   return tabs[name];
+}
+
+/** A heading as the app reads it: tidy spaces, and no "(auto)" note on the end. */
+function heading_(cell) {
+  return String(cell).replace(/\s+/g, ' ').replace(/\s*\(auto[^)]*\)\s*$/i, '').trim();
 }
 
 /** Maps each heading in a row of cells to its column number (1 = column A). */
 function columnsOf_(headings) {
   const col = {};
   headings.forEach((heading, i) => {
-    const text = String(heading).trim();
+    const text = heading_(heading);
     if (text && !(text in col)) col[text] = i + 1;
   });
   return col;
 }
 
-/** A booking tab: its sheet, its heading row (the one that starts with Booking ID) and its columns. */
+/** A tab with a heading row: its sheet, where the headings are, and its columns. marks = headings that row must hold. */
+function headed_(name, marks) {
+  if (headRows[name]) return headRows[name];
+  const sheet = tab_(name), width = sheet.getLastColumn();
+  if (!width) throw new Error('The ' + name + ' tab is empty. Tell Aadil.');
+  const top = sheet.getRange(1, 1, Math.min(10, sheet.getMaxRows()), width).getValues();
+  const at = top.findIndex(row => { const row_ = row.map(heading_); return marks.every(mark => row_.includes(mark)); });
+  if (at < 0) throw new Error('Could not find the "' + marks[0] + '" heading on the ' + name + ' tab. Tell Aadil.');
+  headRows[name] = { sheet: sheet, name: name, headRow: at + 1, col: columnsOf_(top[at]), width: width, headings: top[at].map(heading_) };
+  return headRows[name];
+}
+
+/** Clients, Money, Event day, Videos or Designs: the same row is the same booking on each. */
 function bookingTab_(name) {
-  const sheet = tab_(name);
-  const top = sheet.getRange(1, 1, 10, sheet.getLastColumn()).getValues();
-  const at = top.findIndex(row => String(row[0]).trim() === 'Booking ID');
-  if (at < 0) throw new Error('Could not find the "Booking ID" heading on the ' + name + ' tab.');
-  return { sheet: sheet, name: name, headRow: at + 1, col: columnsOf_(top[at]) };
+  return headed_(name, ['Booking ID']);
+}
+
+/** Payments or Expenses: a plain list. */
+function listTab_(name) {
+  return headed_(name, ['Date', 'Amount']);
 }
 
 function enquiryTab_() {
-  const sheet = tab_(TAB.enquiries);
-  const col = columnsOf_(sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]);
-  ENQUIRY_HEADINGS.forEach(heading => {
-    if (!col[heading]) throw new Error('The Enquiries tab is missing its "' + heading + '" heading.');
+  const tab = headed_(TAB.enquiries, ['Received', 'Name']);
+  HEADINGS['Enquiries'].forEach(heading => {
+    if (!tab.col[heading]) throw new Error('The Enquiries tab is missing its "' + heading + '" heading. Tell Aadil.');
   });
-  return { sheet: sheet, col: col };
+  return tab;
+}
+
+/** Throws unless the tab has that heading. */
+function need_(tab, heading) {
+  if (!tab.col[heading]) throw new Error('The ' + tab.name + ' tab is missing its "' + heading + '" heading. Nothing was changed. Tell Aadil.');
+  return tab.col[heading];
 }
 
 /** The dropdown lists from Settings, and the packages from Prices. */
@@ -188,75 +291,196 @@ function lists_() {
   return lists;
 }
 
+/** The options for one dropdown: from Settings, or the spare list if Settings has none. */
+function options_(lists, name) {
+  return lists[name] && lists[name].length ? lists[name] : (SPARE_LISTS[name] || []);
+}
+
+function today_() {
+  return Utilities.formatDate(new Date(), book_().getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+}
+
 /* ---------- reading ---------- */
 
-/** Everything the Clients screen shows. Pass the lists in if they have already been read. */
-function read_(lists) {
+/**
+ * Everything every screen shows, in one read. Pass the lists in if they have already been read.
+ * Anything the tracker is missing is listed in problems, and the rest is still read.
+ */
+function read_(lists, problems) {
   const timeZone = book_().getSpreadsheetTimeZone();
   const day = value => isDate_(value) ? Utilities.formatDate(value, timeZone, 'yyyy-MM-dd') : '';
+  const wrong = problems || [];
+  const tryTo = (work, otherwise) => {
+    try { return work(); } catch (err) { wrong.push(String((err && err.message) || err)); return otherwise; }
+  };
+
   const all = lists || lists_();
   const dropdowns = Object.assign({}, all);
   delete dropdowns.packages;
+  if (!dropdowns['Event type']) wrong.push('Could not find the dropdown lists on the Settings tab.');
+  if (!all.packages.length) wrong.push('Could not find the packages on the Prices tab.');
+
   return {
     readAt: Date.now(),
-    sheetId: SHEET_ID,
-    bookings: readBookings_(day),
-    enquiries: readEnquiries_(day),
+    today: Utilities.formatDate(new Date(), timeZone, 'yyyy-MM-dd'),
+    bookings: readBookings_(day, wrong),
+    enquiries: tryTo(() => readEnquiries_(day), []),
+    payments: tryTo(() => readPayments_(day, wrong), []),
+    expenses: tryTo(() => readExpenses_(day, wrong), []),
+    reports: tryTo(() => readReports_(), null),
     lists: dropdowns,
-    packages: all.packages
+    packages: all.packages,
+    prices: tryTo(() => tab_(TAB.prices).getDataRange().getDisplayValues(), []),   // the Prices tab as it reads, from A1
+    packing: PACKING,
+    videosFolder: String(PropertiesService.getScriptProperties().getProperty('VIDEOS_FOLDER') || ''),
+    problems: wrong
   };
 }
 
-function readBookings_(day) {
-  const clients = bookingTab_(TAB.clients), money = bookingTab_(TAB.money);
-  const count = LAST_BOOKING_ROW - clients.headRow;
-  const rows = clients.sheet.getRange(clients.headRow + 1, 1, count, clients.col['Notes'] || clients.sheet.getLastColumn()).getValues();
+/** Lists the headings a tab should have and hasn't. */
+function missing_(tab, problems) {
+  (HEADINGS[tab.name] || []).forEach(heading => {
+    if (!tab.col[heading]) problems.push('The ' + tab.name + ' tab is missing its "' + heading + '" heading.');
+  });
+}
 
-  // Only the four money columns the screen needs, not the whole tab and its reports.
-  const wanted = ['Total', 'Received', 'Owing', 'Invoice no.'].filter(h => money.col[h]);
-  const firstCol = Math.min.apply(null, wanted.map(h => money.col[h]));
-  const lastCol = Math.max.apply(null, wanted.map(h => money.col[h]));
-  const lined = wanted.length && money.headRow === clients.headRow;
-  const sums = lined ? money.sheet.getRange(money.headRow + 1, firstCol, count, lastCol - firstCol + 1).getValues() : [];
+function readBookings_(day, problems) {
+  const clients = bookingTab_(TAB.clients);
+  missing_(clients, problems);
+  need_(clients, 'Client name');
+  const first = clients.headRow + 1;
+  const every = clients.sheet.getRange(first, 1, Math.min(LAST_BOOKING_ROW, clients.sheet.getMaxRows()) - clients.headRow, clients.width).getValues();
+  let count = 0;                              // rows to read on the other tabs: down to the last client
+  every.forEach((row, i) => { if (String(row[clients.col['Client name'] - 1]).trim()) count = i + 1; });
+  if (!count) return [];
 
+  /* One of the other booking tabs, read once. display = as the cells show, which suits times and ticks. */
+  const side = (name, display) => {
+    try {
+      const tab = bookingTab_(name);
+      missing_(tab, problems);
+      if (tab.headRow !== clients.headRow) throw new Error('The ' + name + ' tab no longer lines up with the Clients tab, so it was not read.');
+      const range = tab.sheet.getRange(first, 1, count, tab.width);
+      const rows = display ? range.getDisplayValues() : range.getValues();
+      return { tab: tab, cell: (i, heading) => tab.col[heading] ? rows[i][tab.col[heading] - 1] : '' };
+    } catch (err) {
+      problems.push(String((err && err.message) || err));
+      return { tab: null, cell: () => '' };
+    }
+  };
+  const money = side(TAB.money, false), eventDay = side(TAB.eventDay, true), videos = side(TAB.videos, true), designs = side(TAB.designs, false);
+  const folders = links_(videos.tab, 'Drive folder link', first, count);
+  const photos = links_(designs.tab, 'Photos link', first, count);
+  const canva = links_(designs.tab, 'Canva link', first, count);
+
+  const text = value => String(value == null ? '' : value).trim();
+  const number = value => Number(value) || 0;
   const bookings = [];
-  rows.forEach((row, i) => {
+  every.slice(0, count).forEach((row, i) => {
     const cell = heading => clients.col[heading] ? row[clients.col[heading] - 1] : '';
-    const sum = heading => lined && money.col[heading] ? sums[i][money.col[heading] - firstCol] : '';
-    const client = String(cell('Client name')).trim();
+    const client = text(cell('Client name'));
     if (!client) return;
+    const made = designs.cell(i, 'Styles made on');
     bookings.push({
-      row: clients.headRow + 1 + i,
-      id: String(cell('Booking ID')),
+      row: first + i,
+      id: text(cell('Booking ID')),
       client: client,
       date: day(cell('Event date')),
-      status: String(cell('Status')),
-      nextStep: String(cell('Next step')),
-      phone: String(cell('Phone')),
-      email: String(cell('Email')),
-      insta: String(cell('Instagram')),
-      source: String(cell('How they found us')),
-      type: String(cell('Event type')),
-      venue: String(cell('Venue')),
-      suburb: String(cell('Suburb')),
-      region: String(cell('Region')),
-      pkg: String(cell('Package')),
-      cancelled: String(cell('Cancelled')),
-      notes: String(cell('Notes')),
-      total: Number(sum('Total')) || 0,
-      received: Number(sum('Received')) || 0,
-      owing: Number(sum('Owing')) || 0,
-      invoice: String(sum('Invoice no.'))
+      status: text(cell('Status')),
+      nextStep: text(cell('Next step')),
+      phone: text(cell('Phone')),
+      email: text(cell('Email')),
+      insta: text(cell('Instagram')),
+      source: text(cell('How they found us')),
+      referredBy: text(cell('Referred by')),
+      type: text(cell('Event type')),
+      venue: text(cell('Venue')),
+      suburb: text(cell('Suburb')),
+      region: text(cell('Region')),
+      pkg: text(cell('Package')),
+      cancelled: text(cell('Cancelled')),
+      notes: text(cell('Notes')),
+
+      invoice: text(money.cell(i, 'Invoice no.')),
+      total: number(money.cell(i, 'Total')),
+      received: number(money.cell(i, 'Received')),
+      owing: number(money.cell(i, 'Owing')),
+      bond: text(money.cell(i, 'Bond')),
+      packagePrice: number(money.cell(i, 'Package price')),
+      extras: number(money.cell(i, 'Extras')),
+      costs: number(money.cell(i, 'Costs logged')),
+      otherCosts: number(money.cell(i, 'Other costs')),
+      profit: number(money.cell(i, 'Profit')),
+      customPrice: number(money.cell(i, 'Custom price')),
+      highlightReel: text(money.cell(i, 'Highlight reel')),
+      customDesign: text(money.cell(i, 'Custom board and screen')),
+      noPowerPoint: text(money.cell(i, 'No power point')),
+      secondEvent: text(money.cell(i, 'Second event')),
+      hostHours: number(money.cell(i, 'Host hours')),
+      extraHours: number(money.cell(i, 'Extra hours')),
+      extraDays: number(money.cell(i, 'Extra days')),
+      travelFee: number(money.cell(i, 'Travel fee')),
+      discount: number(money.cell(i, 'Discount')),
+
+      eventDay: {
+        hours: text(eventDay.cell(i, 'Hours')),
+        powerPoint: text(eventDay.cell(i, 'Power point')),
+        setupTime: text(eventDay.cell(i, 'Setup time')),
+        startTime: text(eventDay.cell(i, 'Start time')),
+        runningIt: text(eventDay.cell(i, 'Who is running it')),
+        venueConfirmed: text(eventDay.cell(i, 'Venue confirmed')),
+        powerSorted: text(eventDay.cell(i, 'Power sorted')),
+        packed: text(eventDay.cell(i, 'Packed')),
+        packedItems: text(eventDay.cell(i, 'Packed items')),
+        notes: text(eventDay.cell(i, 'Day notes'))
+      },
+      videos: {
+        folder: folders[i] || '',
+        guestMessages: text(videos.cell(i, 'Guest messages')),
+        sent: text(videos.cell(i, 'Videos sent')),
+        linkEnds: text(videos.cell(i, 'Link ends')),
+        clipsOk: text(videos.cell(i, 'Clips OK to share')),
+        offersOk: text(videos.cell(i, 'OK to send offers')),
+        review: text(videos.cell(i, 'Review'))
+      },
+      designs: {
+        customBoard: text(designs.cell(i, 'Custom board?')),
+        board: text(designs.cell(i, 'Board design')),
+        screen: text(designs.cell(i, 'Screen design')),
+        canva: canva[i] || '',
+        stickerPrinted: text(designs.cell(i, 'Sticker printed')),
+        names: text(designs.cell(i, 'Names or title')),
+        line2: text(designs.cell(i, 'Second line')),
+        defaultWording: text(designs.cell(i, 'Default screen wording')),
+        thanksWording: text(designs.cell(i, 'Thank you wording')),
+        colours: text(designs.cell(i, 'Theme colours')),
+        notes: text(designs.cell(i, 'Brief notes')),
+        photos: photos[i] || '',
+        madeOn: isDate_(made) ? day(made) : text(made)
+      }
     });
   });
   return bookings;
+}
+
+/** One column of links. A cell may show the address itself, or words with the link behind them. */
+function links_(tab, heading, firstRow, count) {
+  if (!tab || !tab.col[heading] || !count) return [];
+  const range = tab.sheet.getRange(firstRow, tab.col[heading], count, 1);
+  const shown = range.getDisplayValues().map(line => String(line[0]).trim());
+  if (shown.every(words => !words || /^https?:\/\//i.test(words))) return shown;
+  const rich = range.getRichTextValues();
+  return shown.map((words, i) => {
+    if (!words || /^https?:\/\//i.test(words)) return words;
+    return (rich[i][0] && rich[i][0].getLinkUrl()) || '';
+  });
 }
 
 function readEnquiries_(day) {
   const tab = enquiryTab_(), last = tab.sheet.getLastRow();
   if (last < 2) return [];
   const enquiries = [];
-  tab.sheet.getRange(2, 1, last - 1, tab.sheet.getLastColumn()).getValues().forEach((row, i) => {
+  tab.sheet.getRange(2, 1, last - 1, tab.width).getValues().forEach((row, i) => {
     const cell = heading => row[tab.col[heading] - 1];
     const name = String(cell('Name')).trim();
     if (!name) return;
@@ -275,6 +499,70 @@ function readEnquiries_(day) {
     });
   });
   return enquiries;
+}
+
+/** The rows of Payments or Expenses that have something typed in them. */
+function listRows_(tab) {
+  const first = tab.headRow + 1, last = tab.sheet.getLastRow();
+  return last < first ? [] : tab.sheet.getRange(first, 1, last - first + 1, tab.width).getValues();
+}
+
+function readPayments_(day, problems) {
+  const tab = listTab_(TAB.payments);
+  missing_(tab, problems);
+  const payments = [];
+  listRows_(tab).forEach((row, i) => {
+    const cell = heading => tab.col[heading] ? row[tab.col[heading] - 1] : '';
+    const amount = Number(cell('Amount')) || 0, what = String(cell('What')).trim();
+    if (!amount && !what) return;
+    payments.push({
+      row: tab.headRow + 1 + i,
+      date: day(cell('Date')),
+      invoice: String(cell('Invoice no.')).trim(),
+      client: String(cell('Client')).trim(),
+      amount: amount,
+      what: what,
+      note: String(cell('Paid by or a note')).trim()
+    });
+  });
+  return payments;
+}
+
+function readExpenses_(day, problems) {
+  const tab = listTab_(TAB.expenses);
+  missing_(tab, problems);
+  const expenses = [];
+  listRows_(tab).forEach((row, i) => {
+    const cell = heading => tab.col[heading] ? row[tab.col[heading] - 1] : '';
+    const amount = Number(cell('Amount')) || 0, what = String(cell('What')).trim();
+    if (!amount && !what) return;
+    expenses.push({
+      row: tab.headRow + 1 + i,
+      date: day(cell('Date')),
+      what: what,
+      type: String(cell('Type')).trim(),
+      amount: amount,
+      invoice: String(cell('Invoice no.')).trim(),
+      client: String(cell('Client')).trim(),
+      notes: String(cell('Notes')).trim()
+    });
+  });
+  return expenses;
+}
+
+/** The six report numbers on the Money tab: income, expenses, profit, expected income, bonds held, should be in the bank. */
+function readReports_() {
+  const money = bookingTab_(TAB.money), keys = Object.keys(REPORTS), reports = {};
+  const from = money.headings.indexOf(REPORTS.income);
+  const at = keys.map(key => from < 0 ? -1 : money.headings.indexOf(REPORTS[key], from));
+  if (at.every(index => index >= 0)) {
+    const line = money.sheet.getRange(money.headRow + 1, 1, 1, money.width).getValues()[0];
+    keys.forEach((key, k) => { reports[key] = Number(line[at[k]]) || 0; });
+  } else {
+    const line = money.sheet.getRange(REPORTS_RANGE).getValues()[0];
+    keys.forEach((key, k) => { reports[key] = Number(line[k]) || 0; });
+  }
+  return reports;
 }
 
 /* ---------- the public enquiry form: no key, can only add one row to Enquiries ---------- */
@@ -314,7 +602,7 @@ function enquire_(arg) {
   return 'ok';
 }
 
-/** Trims what a stranger typed: no control characters, nothing a sheet could read as a formula. */
+/** Trims what someone typed: no control characters, nothing a sheet could read as a formula. */
 function tidy_(value, maxLength) {
   return String(value == null ? '' : value).replace(/[\u0000-\u001f]+/g, ' ').replace(/^[=+@\s-]+/, '').trim().slice(0, maxLength);
 }
@@ -351,26 +639,26 @@ function setEnquiryStatus_(arg) {
 
   const tab = enquiryTab_(), sheet = tab.sheet;
   if (!(row > 1 && row <= sheet.getLastRow())) throw new Error('That enquiry is no longer there. Press Refresh.');
-  const line = sheet.getRange(row, 1, 1, sheet.getLastColumn());
+  const line = sheet.getRange(row, 1, 1, tab.width);
   const values = line.getValues()[0], formulas = line.getFormulas()[0];
   const cell = heading => values[tab.col[heading] - 1];
 
   if (String(cell('Name')).trim() !== String(arg.name).trim()) throw new Error('The enquiries have moved. Press Refresh and try again.');
-  if (String(cell('What happened')).trim() === 'Moved to bookings') {
-    throw new Error('This enquiry is already booking ' + String(cell('Booking ID')).trim() + '. Change it on the Clients tab.');
+  if (String(cell('What happened')).trim() === 'Moved to bookings' || String(cell('Booking ID')).trim()) {
+    throw new Error('This enquiry is already booking ' + (String(cell('Booking ID')).trim() || 'on the Clients tab') + '. Change it on the Clients tab.');
   }
   ['Status', 'What happened', 'Booking ID'].forEach(heading => {
     if (formulas[tab.col[heading] - 1]) throw new Error(heading + ' on the Enquiries tab holds a formula, so nothing was changed.');
   });
 
-  const booking = status === 'Waiting on deposit' ? newBooking_(bookingFromEnquiry_(cell, arg.eventDate, lists), lists) : { id: '', row: 0 };
+  const booking = status === 'Waiting on deposit' ? newBooking_(bookingFromEnquiry_(cell, arg.eventDate, lists), lists) : { id: '', row: 0, invoice: '' };
 
   const what = status === 'Waiting on deposit' ? 'Moved to bookings' : status === 'Cancelled' ? 'Cancelled' : '';
   sheet.getRange(row, tab.col['Status']).setValue(status);
   sheet.getRange(row, tab.col['What happened']).setValue(what);
   sheet.getRange(row, tab.col['Booking ID']).setNumberFormat('@').setValue(booking.id);
   SpreadsheetApp.flush();
-  return { id: booking.id, row: booking.row, data: read_(lists) };
+  return { id: booking.id, row: booking.row, invoice: booking.invoice, data: read_(lists) };
 }
 
 /** Turns an enquiry row into the fields of a new booking. cell(heading) gives the enquiry's values. */
@@ -411,64 +699,72 @@ function bookingFromEnquiry_(cell, askedDate, lists) {
 function addBooking_(fields) {
   const lists = lists_(), booking = newBooking_(fields, lists);
   SpreadsheetApp.flush();
-  return { id: booking.id, row: booking.row, data: read_(lists) };
+  return { id: booking.id, row: booking.row, invoice: booking.invoice, data: read_(lists) };
 }
 
-/** Writes one booking into the first empty row. Nothing is written until every value has passed. */
+/** The next number in a run such as B-0007 or INV-0007: the one Settings shows, unless that is behind the ones in use. */
+function nextNumber_(prefix, used, shown) {
+  const pattern = new RegExp('^' + prefix + '-(\\d{4,})$');
+  let highest = 0;
+  used.forEach(value => { const m = pattern.exec(String(value).trim()); if (m) highest = Math.max(highest, Number(m[1])); });
+  const onSettings = pattern.exec(String(shown).trim());
+  return onSettings && Number(onSettings[1]) > highest ? String(shown).trim() : prefix + '-' + ('0000' + (highest + 1)).slice(-Math.max(4, String(highest + 1).length));
+}
+
+/** Writes one booking into the first empty row, with the next booking ID and invoice number. Nothing is written until every value has passed. */
 function newBooking_(fields, lists) {
   if (!String(fields['Client name'] || '').trim()) throw new Error('A booking needs a client name.');
+  if (String(fields['Custom price'] == null ? '' : fields['Custom price']).trim() !== '' && !/^custom$/i.test(String(fields['Package'] || '').trim())) {
+    throw new Error('A custom price is only for the Custom package.');
+  }
   Object.keys(fields).forEach(heading => {
-    if (!CLIENT_FIELDS[heading] && !MONEY_FIELDS[heading]) throw new Error('"' + heading + '" is not a column this app may change.');
+    if (!has_(CLIENT_FIELDS, heading) && !has_(MONEY_FIELDS, heading)) throw new Error('"' + heading + '" is not a column this app may change.');
   });
 
   const clients = bookingTab_(TAB.clients), money = bookingTab_(TAB.money);
   if (clients.headRow !== money.headRow) throw new Error('The Clients and Money tabs no longer line up. Nothing was changed.');
-  ['Booking ID', 'Client name'].forEach(heading => {
-    if (!clients.col[heading]) throw new Error('The Clients tab is missing its "' + heading + '" heading.');
-  });
+  need_(clients, 'Booking ID'); need_(clients, 'Client name'); need_(money, 'Invoice no.');
 
-  // Find the first row with no client name, and the highest booking ID so far.
-  const firstRow = clients.headRow + 1;
+  // Find the first row with no client name, and the booking IDs and invoice numbers in use.
+  const firstRow = clients.headRow + 1, count = LAST_BOOKING_ROW - clients.headRow;
   const width = Math.max(clients.col['Booking ID'], clients.col['Client name']);
-  const existing = clients.sheet.getRange(firstRow, 1, LAST_BOOKING_ROW - clients.headRow, width).getValues();
-  let row = 0, highest = 0;
-  existing.forEach((line, i) => {
-    const id = /^B-(\d{4})$/.exec(String(line[clients.col['Booking ID'] - 1]).trim());
-    if (id) highest = Math.max(highest, Number(id[1]));
-    if (!row && !String(line[clients.col['Client name'] - 1]).trim()) row = firstRow + i;
-  });
-  if (!row) throw new Error('The Clients tab has no empty rows left.');
-  if (String(existing[row - firstRow][clients.col['Booking ID'] - 1]).trim()) {
+  const existing = clients.sheet.getRange(firstRow, 1, count, width).getValues();
+  const at = existing.findIndex(line => !String(line[clients.col['Client name'] - 1]).trim());
+  if (at < 0) throw new Error('The Clients tab has no empty rows left.');
+  const row = firstRow + at;
+  if (String(existing[at][clients.col['Booking ID'] - 1]).trim()) {
     throw new Error('Row ' + row + ' on the Clients tab has a booking ID but no name. Fix that row in the tracker first.');
   }
+  const invoices = money.sheet.getRange(firstRow, money.col['Invoice no.'], count, 1).getDisplayValues().map(line => line[0]);
+  if (String(invoices[at]).trim()) {
+    throw new Error('Row ' + row + ' on the Money tab has an invoice number but no client. Fix that row in the tracker first.');
+  }
 
-  // Use the next ID shown on Settings, unless it is behind the IDs already in use.
-  const shown = String(tab_(TAB.settings).getRange(NEXT_BOOKING_ID_CELL).getDisplayValue()).trim();
-  const shownNumber = /^B-(\d{4})$/.exec(shown);
-  const id = shownNumber && Number(shownNumber[1]) > highest ? shown : 'B-' + ('0000' + (highest + 1)).slice(-4);
+  const settings = tab_(TAB.settings);
+  const id = nextNumber_('B', existing.map(line => line[clients.col['Booking ID'] - 1]), settings.getRange(NEXT_BOOKING_ID_CELL).getDisplayValue());
+  const invoice = nextNumber_('INV', invoices, settings.getRange(NEXT_INVOICE_CELL).getDisplayValue());
 
-  // Check everything first. One read of the row's formulas per tab covers every cell.
-  const writes = [];
-  [[clients, CLIENT_FIELDS], [money, MONEY_FIELDS]].forEach(pair => {
-    const tab = pair[0], rules = pair[1];
-    const formulas = tab.sheet.getRange(row, 1, 1, tab.sheet.getLastColumn()).getFormulas()[0];
-    const guard = heading => {
-      if (!tab.col[heading]) throw new Error('The ' + tab.name + ' tab is missing its "' + heading + '" heading.');
-      if (formulas[tab.col[heading] - 1]) throw new Error(heading + ' in row ' + row + ' holds a formula, so nothing was changed.');
-    };
-    if (tab === clients) guard('Booking ID');
-    Object.keys(rules).forEach(heading => {
-      const text = fields[heading] == null ? '' : String(fields[heading]).trim();
-      if (!text) return;
-      guard(heading);
-      checkValue_(heading, rules[heading], text, lists);
-      writes.push({ cell: tab.sheet.getRange(row, tab.col[heading]), type: rules[heading], text: text });
-    });
+  // Check everything first, then write.
+  const typed = (rules, more) => Object.keys(rules).filter(heading => String(fields[heading] == null ? '' : fields[heading]).trim() !== '')
+    .map(heading => ({ heading: heading, type: rules[heading], text: String(fields[heading]).trim() })).concat(more);
+  const onClients = checked_(clients, row, typed(CLIENT_FIELDS, [{ heading: 'Booking ID', type: 'text', text: id }]), lists);
+  const onMoney = checked_(money, row, typed(MONEY_FIELDS, [{ heading: 'Invoice no.', type: 'text', text: invoice }]), lists);
+  onClients.concat(onMoney).forEach(writeValue_);
+  return { id: id, row: row, invoice: invoice };
+}
+
+/**
+ * Checks a set of cells on one row of one tab: the heading is there, the cell holds no formula and the value is allowed.
+ * items = [{heading, type, text}]. An empty text means "clear the cell". Gives back the writes, ready for writeValue_.
+ */
+function checked_(tab, row, items, lists) {
+  const formulas = tab.sheet.getRange(row, 1, 1, tab.width).getFormulas()[0];
+  return items.map(item => {
+    const column = need_(tab, item.heading);
+    if (formulas[column - 1]) throw new Error(item.heading + ' in row ' + row + ' of the ' + tab.name + ' tab holds a formula, so nothing was changed.');
+    if (item.text !== '') checkValue_(item.heading, item.type, item.text, lists);
+    return { cell: tab.sheet.getRange(row, column), type: item.type, text: item.text };
   });
-
-  clients.sheet.getRange(row, clients.col['Booking ID']).setNumberFormat('@').setValue(id);
-  writes.forEach(writeValue_);
-  return { id: id, row: row };
 }
 
 /** Throws if the value is not allowed in that kind of column. */
@@ -479,29 +775,268 @@ function checkValue_(heading, type, text, lists) {
     if (!isFinite(number) || number < 0) throw new Error(heading + ' needs a number, zero or more.');
   } else if (type === 'date') {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) throw new Error(heading + ' needs a date.');
+  } else if (type === 'time') {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(text)) throw new Error(heading + ' needs a time.');
   } else if (type === 'yes') {
-    if (text !== 'Yes') throw new Error(heading + ' can only be Yes or empty.');
+    if (!options_(lists, 'Yes').includes(text)) throw new Error(heading + ' can only be Yes or empty.');
   } else if (type === 'package') {
     if (!lists.packages.some(p => p.name === text)) throw new Error('"' + text + '" is not a package on the Prices tab.');
   } else if (type.indexOf('list:') === 0) {
-    if (!(lists[type.slice(5)] || []).includes(text)) throw new Error('"' + text + '" is not an option for ' + heading + ' on the Settings tab.');
+    if (!options_(lists, type.slice(5)).includes(text)) throw new Error('"' + text + '" is not an option for ' + heading + ' on the Settings tab.');
   }
 }
 
 function writeValue_(write) {
   const cell = write.cell, text = write.text;
-  if (write.type === 'num') {
+  if (text === '') {
+    cell.clearContent();                          // keeps the cell's dropdown and its look
+  } else if (write.type === 'num') {
     cell.setValue(Math.round(Number(text) * 100) / 100);
   } else if (write.type === 'date') {
     const parts = text.split('-').map(Number);
     const unformatted = /^(general|0\.?#*)$/i.test(cell.getNumberFormat());
     cell.setValue(serial_(parts[0], parts[1], parts[2]));
     if (unformatted) cell.setNumberFormat('ddd d mmm yyyy');
+  } else if (write.type === 'time') {
+    const parts = text.split(':').map(Number), format = cell.getNumberFormat();
+    if (format === '@') {
+      cell.setValue((parts[0] % 12 || 12) + ':' + ('0' + parts[1]).slice(-2) + (parts[0] < 12 ? ' am' : ' pm'));
+    } else {
+      cell.setValue((parts[0] * 60 + parts[1]) / 1440);      // a sheet keeps a time as a part of a day
+      if (/^(general|0\.?#*)$/i.test(format)) cell.setNumberFormat('h:mm am/pm');
+    }
   } else if (write.type === 'text') {
     cell.setNumberFormat('@').setValue(text);     // plain text, so a phone number keeps its leading 0
   } else {
     cell.setValue(text);
   }
+}
+
+/** arg = {row, id}. Checks that row still holds that booking, and gives back the row number. */
+function bookingRow_(arg) {
+  const clients = bookingTab_(TAB.clients), row = Number(arg.row);
+  if (!(row > clients.headRow && row <= LAST_BOOKING_ROW && row === Math.floor(row))) throw new Error('That booking is no longer there. Press Refresh.');
+  const id = String(clients.sheet.getRange(row, need_(clients, 'Booking ID')).getDisplayValue()).trim();
+  if (!id || id !== String(arg.id == null ? '' : arg.id).trim()) throw new Error('The bookings have moved. Press Refresh and try again.');
+  return row;
+}
+
+/** One of the other booking tabs, checked to line up with Clients. */
+function sideTab_(name) {
+  const tab = bookingTab_(name);
+  if (tab.headRow !== bookingTab_(TAB.clients).headRow) throw new Error('The ' + name + ' and Clients tabs no longer line up. Nothing was changed.');
+  return tab;
+}
+
+/* ---------- money: payments and expenses ---------- */
+
+/** Adds rows to Payments or Expenses, straight after the last row that has anything typed in it. lines = [{heading: text}]. */
+function addRows_(tab, rules, lines, lists) {
+  const typed = Object.keys(rules);
+  typed.forEach(heading => need_(tab, heading));
+  const first = tab.headRow + 1, most = tab.sheet.getMaxRows();
+  let last = tab.headRow;
+  if (most >= first) {
+    tab.sheet.getRange(first, 1, most - tab.headRow, tab.width).getValues().forEach((line, i) => {
+      if (typed.some(heading => String(line[tab.col[heading] - 1]).trim() !== '')) last = first + i;
+    });
+  }
+  if (last + lines.length > most) throw new Error('The ' + tab.name + ' tab has no empty rows left. Add more rows at the bottom of it in the tracker, then try again.');
+
+  let writes = [];
+  lines.forEach((line, i) => {
+    const items = typed.filter(heading => String(line[heading] == null ? '' : line[heading]).trim() !== '')
+      .map(heading => ({ heading: heading, type: rules[heading], text: String(line[heading]).trim() }));
+    writes = writes.concat(checked_(tab, last + 1 + i, items, lists));
+  });
+  writes.forEach(writeValue_);
+  return last + 1;
+}
+
+/** Throws unless that invoice number belongs to a booking. */
+function needInvoice_(invoice) {
+  if (!/^INV-\d{4,}$/.test(invoice)) throw new Error('"' + invoice + '" is not an invoice number.');
+  const money = bookingTab_(TAB.money), first = money.headRow + 1;
+  const inUse = money.sheet.getRange(first, need_(money, 'Invoice no.'), LAST_BOOKING_ROW - money.headRow, 1).getDisplayValues();
+  if (!inUse.some(line => String(line[0]).trim() === invoice)) throw new Error('No booking has the invoice number ' + invoice + '. Press Refresh and try again.');
+}
+
+function amount_(value, label) {
+  const amount = Number(value);
+  if (!isFinite(amount) || amount <= 0) throw new Error(label + ' needs an amount above zero.');
+  return String(Math.round(amount * 100) / 100);
+}
+
+/**
+ * arg = {invoice, payments: [{what, amount, note}]}. What is Hire, Bond in or Bond back.
+ * A transfer that covers the hire and the bond comes as two payments, so it goes in as two rows. Dated today.
+ */
+function addPayment_(arg) {
+  const lists = lists_(), invoice = String(arg.invoice || '').trim(), today = today_();
+  const payments = Array.isArray(arg.payments) ? arg.payments : [];
+  if (!payments.length || payments.length > 3) throw new Error('There is no payment to save.');
+  needInvoice_(invoice);
+  const lines = payments.map(payment => ({
+    'Date': today, 'Invoice no.': invoice, 'Amount': amount_(payment.amount, 'A payment'),
+    'What': String(payment.what || '').trim(), 'Paid by or a note': tidy_(payment.note, 200)
+  }));
+  lines.forEach(line => { if (!line['What']) throw new Error('A payment needs to be Hire, Bond in or Bond back.'); });
+  const row = addRows_(listTab_(TAB.payments), PAYMENT_FIELDS, lines, lists);
+  SpreadsheetApp.flush();
+  return { row: row, data: read_(lists) };
+}
+
+/** arg = {what, amount, type, invoice, notes}. The invoice number is only for a cost that was for one client. Dated today. */
+function addExpense_(arg) {
+  const lists = lists_(), invoice = String(arg.invoice || '').trim();
+  const what = tidy_(arg.what, 120);
+  if (!what) throw new Error('An expense needs a few words on what it was.');
+  if (invoice) needInvoice_(invoice);
+  const line = {
+    'Date': today_(), 'What': what, 'Type': String(arg.type || '').trim(), 'Amount': amount_(arg.amount, 'An expense'),
+    'Invoice no.': invoice, 'Notes': tidy_(arg.notes, 300)
+  };
+  if (!line['Type']) throw new Error('An expense needs a type.');
+  const row = addRows_(listTab_(TAB.expenses), EXPENSE_FIELDS, [line], lists);
+  SpreadsheetApp.flush();
+  return { row: row, data: read_(lists) };
+}
+
+/* ---------- event day ---------- */
+
+/**
+ * arg = {row, id, field, value}. Saves one detail or tick for a booking.
+ * field is Setup time, Start time (value "16:30"), Who is running it, Venue confirmed, Power sorted
+ * or Sticker printed (value "Yes"). An empty value clears it.
+ */
+function setEventDay_(arg) {
+  const row = bookingRow_(arg), field = String(arg.field || '');
+  const onDesigns = has_(DESIGN_TICKS, field);
+  if (!onDesigns && !has_(EVENT_FIELDS, field)) throw new Error('"' + field + '" is not a column this app may change.');
+  const type = onDesigns ? DESIGN_TICKS[field] : EVENT_FIELDS[field];
+  const value = type === 'text' ? tidy_(arg.value, 80) : String(arg.value == null ? '' : arg.value).trim();
+  checked_(sideTab_(onDesigns ? TAB.designs : TAB.eventDay), row, [{ heading: field, type: type, text: value }], lists_()).forEach(writeValue_);
+  return { saved: true };
+}
+
+/** arg = {row, id, items: [the ticked packing items]}. Packed turns to Yes once every item is ticked. */
+function setPacking_(arg) {
+  const row = bookingRow_(arg), given = Array.isArray(arg.items) ? arg.items.map(String) : [];
+  given.forEach(item => { if (!PACKING.includes(item)) throw new Error('"' + item + '" is not on the packing list.'); });
+  const ticked = PACKING.filter(item => given.includes(item));
+  const lists = lists_();
+  checked_(sideTab_(TAB.eventDay), row, [
+    { heading: 'Packed items', type: 'text', text: ticked.join(', ') },
+    { heading: 'Packed', type: 'yes', text: ticked.length === PACKING.length ? options_(lists, 'Yes')[0] : '' }
+  ], lists).forEach(writeValue_);
+  return { saved: true };
+}
+
+/* ---------- designs ---------- */
+
+/**
+ * arg = {row, id, brief: {names, line2, defaultWording, thanksWording, colours, notes}, generated}.
+ * Only the parts of the brief that are sent are saved. generated = true also stamps today in "Styles made on".
+ */
+function saveBrief_(arg) {
+  const row = bookingRow_(arg), brief = arg.brief || {};
+  const items = Object.keys(BRIEF_FIELDS).filter(key => has_(brief, key)).map(key => {
+    const value = Array.isArray(brief[key]) ? brief[key].join(', ') : brief[key];
+    // the notes keep their line breaks; everything else is one line
+    const text = key === 'notes' ? String(value == null ? '' : value).split(/\r?\n/).map(line => tidy_(line, 500)).join('\n').trim().slice(0, 2000) : tidy_(value, 200);
+    return { heading: BRIEF_FIELDS[key], type: 'text', text: text };
+  });
+  if (arg.generated) items.push({ heading: 'Styles made on', type: 'date', text: today_() });
+  if (!items.length) throw new Error('There is nothing in the brief to save.');
+  checked_(sideTab_(TAB.designs), row, items, lists_()).forEach(writeValue_);
+  return { saved: true };
+}
+
+/** A ticked style is kept as its name: "wmhb default", "Style 4: Arch", or empty when nothing is ticked. */
+function styleName_(value) {
+  const name = tidy_(value, 60);
+  if (name && name !== 'wmhb default' && !/^Style \d{1,2}: \S.*$/.test(name)) throw new Error('"' + name + '" is not a style name.');
+  return name;
+}
+
+/** arg = {row, id, screen, board}. Saves the ticked screen style, the ticked board style, or both. */
+function setDesignPick_(arg) {
+  const row = bookingRow_(arg), items = [];
+  if (has_(arg, 'screen')) items.push({ heading: 'Screen design', type: 'text', text: styleName_(arg.screen) });
+  if (has_(arg, 'board')) items.push({ heading: 'Board design', type: 'text', text: styleName_(arg.board) });
+  if (!items.length) throw new Error('There is no style to save.');
+  checked_(sideTab_(TAB.designs), row, items, lists_()).forEach(writeValue_);
+  return { saved: true };
+}
+
+/** The ID inside a Drive folder link, or '' if it isn't one. */
+function folderId_(link) {
+  const match = /\/folders\/([-\w]{20,})/.exec(String(link)) || /[?&]id=([-\w]{20,})/.exec(String(link));
+  return match ? match[1] : '';
+}
+
+/** The designs folder, "07 Client Designs", from the script property DESIGNS_FOLDER. */
+function designsFolder_() {
+  const id = folderId_(PropertiesService.getScriptProperties().getProperty('DESIGNS_FOLDER') || '');
+  if (!id) throw new Error('The designs folder isn’t set up yet. Tell Aadil: add a script property called DESIGNS_FOLDER holding the link to 07 Client Designs.');
+  try { return DriveApp.getFolderById(id); } catch (err) { throw new Error('Couldn’t open the designs folder. Tell Aadil to check DESIGNS_FOLDER in the script properties.'); }
+}
+
+/** True when the folder sits directly inside the designs folder. */
+function inDesigns_(folder, designs) {
+  const parents = folder.getParents();
+  while (parents.hasNext()) if (parents.next().getId() === designs.getId()) return true;
+  return false;
+}
+
+/**
+ * arg = {row, id, name, mime, data}. data is the picture as base64 text.
+ * Saves it in the client's own folder inside the designs folder, named like the invoice folders: "005, Pearl"
+ * (the last three digits of the invoice number, a comma, the client's name). The folder is made the first time,
+ * and its link is kept in Designs > Photos link. A link there to a folder anywhere else is never written to.
+ */
+function addBriefPhoto_(arg) {
+  const row = bookingRow_(arg), mime = String(arg.mime || ''), data = String(arg.data || '');
+  if (!/^image\/(jpeg|png|webp)$/.test(mime)) throw new Error('That file is not a picture the app can use. Try a JPG or a PNG.');
+  if (!data) throw new Error('The picture arrived empty. Try again.');
+  if (data.length > PHOTO_MAX_CHARS) throw new Error('That picture is too big. Try a smaller one.');
+
+  const clients = bookingTab_(TAB.clients), money = sideTab_(TAB.money), designs = sideTab_(TAB.designs);
+  const client = tidy_(clients.sheet.getRange(row, need_(clients, 'Client name')).getDisplayValue(), 80).replace(/[\\/]/g, ' ');
+  const invoice = String(money.sheet.getRange(row, need_(money, 'Invoice no.')).getDisplayValue()).trim();
+  const number = /^INV-(\d+)$/.exec(invoice);
+  if (!number) throw new Error('This booking has no invoice number yet, so its designs folder can’t be named. Add it on the Money tab, then try again.');
+  const name = number[1].slice(-3) + ', ' + client;
+  const linkCell = checked_(designs, row, [{ heading: 'Photos link', type: 'text', text: 'https://drive.google.com' }], lists_())[0];
+
+  const top = designsFolder_();
+  let folder = null;
+  const linked = folderId_(links_(designs, 'Photos link', row, 1)[0] || '');
+  if (linked) { try { const f = DriveApp.getFolderById(linked); if (inDesigns_(f, top)) folder = f; } catch (err) { /* gone: find or make it below */ } }
+  if (!folder) { const same = top.getFoldersByName(name); folder = same.hasNext() ? same.next() : top.createFolder(name); }
+
+  const file = folder.createFile(Utilities.newBlob(Utilities.base64Decode(data), mime, tidy_(arg.name, 80).replace(/[\\/]/g, ' ') || 'Brief photo'));
+  if (folderId_(links_(designs, 'Photos link', row, 1)[0] || '') !== folder.getId()) { linkCell.text = folder.getUrl(); writeValue_(linkCell); }
+  return { photo: { id: file.getId(), name: file.getName() }, folder: folder.getUrl() };
+}
+
+/** arg = {row, id}. The client's brief photos, newest first, for the app to show and to use in the styles. */
+function getBriefPhotos_(arg) {
+  const row = bookingRow_(arg), designs = sideTab_(TAB.designs);
+  const id = folderId_(links_(designs, 'Photos link', row, 1)[0] || '');
+  if (!id) return { photos: [] };
+  const files = DriveApp.getFolderById(id).getFiles(), pictures = [];
+  while (files.hasNext()) {
+    const file = files.next();
+    if (/^image\/(jpeg|png|webp)$/.test(String(file.getMimeType()))) pictures.push({ file: file, made: file.getDateCreated().getTime() });
+  }
+  pictures.sort((a, b) => b.made - a.made);
+  return {
+    photos: pictures.slice(0, PHOTOS_SHOWN).map(one => {
+      const blob = one.file.getBlob();
+      return { id: one.file.getId(), name: one.file.getName(), mime: blob.getContentType(), data: Utilities.base64Encode(blob.getBytes()) };
+    })
+  };
 }
 
 /* ---------- dates ---------- */
