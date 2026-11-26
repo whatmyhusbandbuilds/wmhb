@@ -29,15 +29,16 @@ function daysAway(iso) {
   const n = Math.round((ms(iso) - ms(todayIso())) / DAY);
   return n === 0 ? "Today" : n === 1 ? "Tomorrow" : n < 0 ? fmt(iso) : "In " + n + " days";
 }
-/** The seven things to have ready. field = the tracker column a tap saves to. Rows without one tick by themselves. */
+/** The seven things to have ready. field = the tracker column a tap saves to. Rows without one tick by themselves,
+    and only those carry a small label saying where the tick comes from. */
 function readyOf(x) {
   const b = x.b, f = x.f, e = b.eventDay || {}, d = b.designs || {};
   return [
     { key: "fee", label: "Fee paid in full", from: "from Money", done: f.total > 0 && f.owing <= 0 },
-    { key: "bond", label: "Bond paid", from: f.bond === "none" ? "no bond needed" : "from Money", done: f.bond !== "due" },
+    { key: "bond", label: "Bond paid", from: f.bond === "none" ? "No bond needed" : "from Money", done: f.bond !== "due" },
     { key: "design", label: "Board design approved", from: "from Designs", done: !!txt(d.screen) && !!txt(d.board) },
-    { key: "sticker", label: "Sticker printed", from: "from Designs", done: isYes(d.stickerPrinted), field: "Sticker printed" },
-    { key: "venue", label: "Venue confirmed", from: "from Clients", done: isYes(e.venueConfirmed), field: "Venue confirmed" },
+    { key: "sticker", label: "Sticker printed", from: "", done: isYes(d.stickerPrinted), field: "Sticker printed" },
+    { key: "venue", label: "Venue confirmed", from: "", done: isYes(e.venueConfirmed), field: "Venue confirmed" },
     { key: "start", label: "Start time set", from: "", done: !!txt(e.startTime) },
     { key: "power", label: "Power sorted", from: "", done: isYes(e.powerSorted), field: "Power sorted" }
   ];
@@ -56,8 +57,10 @@ function detailsOf(b) {
     { label: "Contact", value: txt(b.phone) || (txt(b.insta) ? "Instagram" : txt(b.email) ? "Email" : "") }
   ];
 }
+/** The event type as this screen says it. A corporate event reads "Corporate", as the calendar's four event types do, so the line stays short. */
+const typeShown = b => { const kind = kindOfType(b.type); return kind && kind.names.includes("Corporate") ? "Corporate" : txt(b.type); };
 /** "Birthday, Sat 12 Dec, INV-0003". Each part stays whole, so a line never breaks in the middle of a date or an invoice number. */
-const eventLine = x => [txt(x.b.type), x.f.date ? dayOf(x.f.date) : "", txt(x.b.invoice)].filter(Boolean).map(part => "<span class=\"nw\">" + esc(part) + "</span>").join(", ");
+const eventLine = x => [typeShown(x.b), x.f.date ? dayOf(x.f.date) : "", txt(x.b.invoice)].filter(Boolean).map(part => "<span class=\"nw\">" + esc(part) + "</span>").join(", ");
 const leftToSort = n => n === 0 ? "All sorted" : n + " thing" + (n === 1 ? "" : "s") + " to sort";
 
 /* ---------- the screen ---------- */
