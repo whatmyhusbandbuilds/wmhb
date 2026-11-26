@@ -246,33 +246,77 @@ function dzPick(row, side, index) {
     () => { const now = eventAt(row); return now ? txt(designOf(now)[side]) : ""; },
     v => { const now = eventAt(row); if (now) designOf(now)[side] = v; });
 }
+/**
+ * The typed brief boxes whose save failed, as "row|key" -> what the tracker held for that box when the save failed.
+ * While the tracker still doesn't have what was typed, they hold the app's reload to a newer version (app.js,
+ * busyTyping), on any tab, and they are tried again each time fresh data comes in (dzRetry). If by then the tracker holds
+ * something else for a box, another device has changed it since: that version is kept, not written over.
+ */
+const dzFailed = new Map();
+/** The brief boxes typed in on this phone and not saved yet, as "row|key". A failed Generate queues only these. */
+const dzTyped = new Set();
 /** Saves one part of the brief once it has been changed. */
-function dzSaveBrief(row, key) {
+async function dzSaveBrief(row, key) {
   const b = eventAt(row), d = S.dzDraft[row]; if (!b || !d) return;
   const value = key === "colours" ? d.colours.join(", ") : d[key];
-  saveLatest("brief" + row + key, "saveBrief", { row, id: b.id, brief: { [key]: value } }, value,
+  const saved = await saveLatest("brief" + row + key, "saveBrief", { row, id: b.id, brief: { [key]: value } }, value,
     () => { const now = eventAt(row); return now ? txt(designOf(now)[key]) : ""; },
     v => {
       const now = eventAt(row); if (now) designOf(now)[key] = v;
       /* v differs from what is on screen only when a save has failed. Colour chips go back. Typed words stay in their box,
-         so nothing typed is lost: the app says it didn't save, and tries again when the brief is left or designs are generated. */
+         so nothing typed is lost: the app says it didn't save, and tries again when the brief is left, designs are generated,
+         fresh data comes in or the phone is back online (dzRetry). */
       if (key === "colours" && d.colours.join(", ") !== v) { d.colours = colourList(v); if (S.dz.row === row) { drawColours(b); syncPalette(); } }
     });
+  const id = row + "|" + key, now = eventAt(row);
+  if (saved === true) { dzFailed.delete(id); dzTyped.delete(id); }
+  else if (saved === false && BRIEF_TEXT.includes(key) && now) dzFailed.set(id, txt(designOf(now)[key]));    /* colour chips go back when they fail, so only typed words wait */
 }
+/** The typed boxes of the brief, the parts a failed save keeps on screen. */
+const BRIEF_TEXT = ["names", "line2", "defaultWording", "thanksWording", "notes"];
 /** The typed parts of the brief that the tracker doesn't have yet (a save failed). The usual wording, left as it came, doesn't count. */
-const dzUnsaved = b => { const d = S.dzDraft[b.row], t = designOf(b); return d ? ["names", "line2", "defaultWording", "thanksWording", "notes"].filter(k => d[k] !== txt(t[k]) && !(!txt(t[k]) && d[k] === (k === "defaultWording" ? WORDING : k === "thanksWording" ? THANKS : ""))) : []; };
+const dzUnsaved = b => { const d = S.dzDraft[b.row], t = designOf(b); return d ? BRIEF_TEXT.filter(k => d[k] !== txt(t[k]) && !(!txt(t[k]) && d[k] === (k === "defaultWording" ? WORDING : k === "thanksWording" ? THANKS : ""))) : []; };
+/** The failed boxes that are still waiting: the tracker doesn't have what was typed. Boxes it now has, or whose booking is gone, drop out. */
+function dzWaiting() {
+  return [...dzFailed.keys()].filter(k => { const [row, key] = k.split("|"), b = S.data && eventAt(+row); if (b && dzUnsaved(b).includes(key)) return true; dzFailed.delete(k); return false; });
+}
+/** What each typed box is called on the brief, for messages. */
+const BOX_NAME = Object.fromEntries(BRIEF_BOXES.concat([["notes", "Notes from the chat"]]));
+/**
+ * Fresh data has come in: tries the waiting boxes again. A box the tracker now holds something else for was changed on
+ * another device after this phone's save failed: that version is kept and shown in the box, and the app says so.
+ * Once the rest land, the app can reload (app.js).
+ */
+function dzRetry() {
+  if (!S.data) return;
+  const changed = {};
+  dzWaiting().forEach(id => {
+    const [row, key] = id.split("|"), b = eventAt(+row), now = txt(designOf(b)[key]);
+    if (now === dzFailed.get(id)) { dzSaveBrief(+row, key); return; }
+    dzFailed.delete(id); dzTyped.delete(id);
+    const d = S.dzDraft[row]; d[key] = now || (key === "defaultWording" ? WORDING : key === "thanksWording" ? THANKS : "");
+    const el = S.tab === "designs" && S.dz.row === +row ? $("#dz-brief [data-key=" + key + "]") : null;
+    if (el && el !== document.activeElement) el.value = d[key];                 /* a box being typed in again keeps the newest typing */
+    (changed[row] = changed[row] || { who: b.client, boxes: [] }).boxes.push("“" + BOX_NAME[key] + "”");
+  });
+  const said = Object.values(changed).map(c => c.boxes.join(" and ") + " in " + c.who + "’s brief " + (c.boxes.length > 1 ? "were" : "was") + " changed on another device, so that version is kept.");
+  if (said.length) toast(said.join(" "));
+}
 document.addEventListener("change", e => {
   const el = e.target, b = S.tab === "designs" && S.data ? dzClient() : null; if (!b) return;
   if (el.id === "dz-file") { const file = el.files && el.files[0]; el.value = ""; if (file) dzAddPhoto(b.row, file); return; }
   if (!el.matches || !el.matches("#dz-brief [data-key]")) return;
   const d = dzDraftOf(b), key = el.dataset.key, value = key === "notes" ? el.value.trim() : el.value.replace(/\s+/g, " ").trim();
   if (d[key] === value) return;
-  d[key] = value; dzSaveBrief(b.row, key);
+  d[key] = value; dzTyped.add(b.row + "|" + key); dzSaveBrief(b.row, key);
 });
 /** Reads the boxes into the brief, in case one is still being typed in. */
 function dzReadBoxes(b) {
   const d = dzDraftOf(b);
-  $$("#dz-brief [data-key]").forEach(el => { d[el.dataset.key] = el.dataset.key === "notes" ? el.value.trim() : el.value.replace(/\s+/g, " ").trim(); });
+  $$("#dz-brief [data-key]").forEach(el => {
+    const key = el.dataset.key, value = key === "notes" ? el.value.trim() : el.value.replace(/\s+/g, " ").trim();
+    if (d[key] !== value) { d[key] = value; dzTyped.add(b.row + "|" + key); }
+  });
   return d;
 }
 /** Generate designs: saves the whole brief, notes the day, and goes to the styles. */
@@ -281,7 +325,10 @@ async function dzGenerate() {
   const row = b.row, d = dzReadBoxes(b), brief = { names: d.names, line2: d.line2, defaultWording: d.defaultWording, thanksWording: d.thanksWording, colours: d.colours.join(", "), notes: d.notes };
   const saved = save("saveBrief", { row, id: b.id, brief, generated: true }, data => { const now = data.bookings.find(x => x.row === row); if (now) Object.assign(designOf(now), brief, { madeOn: todayIso() }); });
   dzGo("styles", "fwd");
-  if (!(await saved) && S.tab === "designs" && S.dz.row === row && S.dz.page !== "brief") dzGo("brief", "back");      /* it didn't save: back to the brief, which still holds what was typed */
+  const ok = !!(await saved), now = eventAt(row);
+  /* it didn't save: only the boxes typed in on this phone wait to be tried again, not ones another device changed */
+  BRIEF_TEXT.forEach(key => { const id = row + "|" + key; if (ok) { dzFailed.delete(id); dzTyped.delete(id); } else if (now && dzTyped.has(id) && !dzFailed.has(id) && dzUnsaved(now).includes(key)) dzFailed.set(id, txt(designOf(now)[key])); });
+  if (!ok && S.tab === "designs" && S.dz.row === row && S.dz.page !== "brief") dzGo("brief", "back");      /* it didn't save: back to the brief, which still holds what was typed */
 }
 
 /* ---------- photos ---------- */
@@ -386,7 +433,7 @@ Object.assign(TAPS, {
   "dz-client": el => { const b = eventAt(+el.dataset.row); if (!b) return; S.dz.row = b.row; S.dz.side = "screen"; const state = dzState(b); dzGo(state === "ready" || state === "chosen" ? "styles" : "brief", "fwd"); },      /* each client starts on Screen */
   "dz-back": () => {
     if (S.dz.page === "open") { dzGo("styles", "back"); return; }
-    const b = dzClient(); if (b && S.dz.page === "brief") dzUnsaved(b).forEach(key => dzSaveBrief(b.row, key));       /* one more try for anything that didn't save */
+    const b = dzClient(); if (b && dzWaiting().some(id => id.split("|")[0] === String(b.row))) load();     /* one more try for anything that didn't save, after reading the tracker afresh (dzRetry) */
     S.dz.row = 0; dzGo("list", "back");
   },
   "dz-edit": () => dzGo("brief", "fwd"),

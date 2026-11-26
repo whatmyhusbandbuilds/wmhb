@@ -171,7 +171,7 @@ const ICON = {
   partners: '<circle cx="9" cy="8.5" r="3"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0"/><circle cx="16.5" cy="9.5" r="2.5"/><path d="M15.5 14.2a4.6 4.6 0 0 1 5 5.3"/>',
   settings: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>'
 };
-/* next = a tab that is not designed yet (Partners and Settings). later = a tab that is designed, and built in a later stage. */
+/* next = a tab that is not designed yet (Partners and Settings): it shows what it will have. Every other tab has its screen in SCREENS. */
 const TABS = [
   { id: "clients", label: "Clients" },
   { id: "money", label: "Money" },
@@ -233,8 +233,7 @@ function go(tab) {
   S.tab = tab;
   const t = TABS.find(x => x.id === tab), screen = SCREENS[tab], title = t.label.toLowerCase();
   let body;
-  if (t.next) body = headHtml(title) + boxHtml("We design this screen next. It will have:", t.next) + (tab === "settings" && VERSION ? "<p class=\"ver\">Version " + VERSION + "</p>" : "");
-  else if (!screen) body = headHtml(title) + boxHtml("This screen is designed and not built yet.", ["It gets built in " + t.later + "."]);
+  if (t.next || !screen) body = headHtml(title) + (t.next ? boxHtml("We design this screen next. It will have:", t.next) : "") + (tab === "settings" && VERSION ? "<p class=\"ver\">Version " + VERSION + "</p>" : "");
   else if (!S.data) body = headHtml(title, screen.right) + (S.trouble ? troubleHtml() : "<p class=\"wait wm-card\" role=\"status\"><span>Loading your bookings…</span></p>");
   else body = (screen.top && screen.top() || headHtml(title, screen.right, !phone() && screen.side ? screen.side() : null, screen.head)) + troubleHtml() + screen.html() + footHtml();
   /* a screen with no laptop design keeps the phone layout, in a centred column */
@@ -290,7 +289,10 @@ async function server(fn, arg) {
 /** Why something failed, in plain words. The back end's own reasons are kept. A dropped connection gets the usual line. */
 const why = x => x && x.told && x.message ? x.message.replace(/^Error:\s*/, "") : "Check your internet and try again.";
 
-function apply(data) { S.data = data; S.readAt = data.readAt || Date.now(); S.trouble = ""; refresh(); }
+function apply(data) {
+  S.data = data; S.readAt = data.readAt || Date.now(); S.trouble = ""; refresh();
+  if (typeof dzRetry === "function") setTimeout(dzRetry, 0);           /* fresh data: one more try for brief words that didn't save (designs.js) */
+}
 let busy = false;
 /** Reads everything from the tracker again. asked = someone pressed Refresh, so say when it is done. */
 async function load(asked) {
@@ -361,6 +363,7 @@ async function saveLatest(key, fn, arg, value, get, set) {
   lane.busy = false; lane.next = null; saving--;
   if (failed) { set(lane.saved); refresh(); say("That didn’t save. " + why(failed)); }
   settle();
+  return !failed;                       /* true once the newest value has saved; a tap that joined a save already on its way gives back nothing */
 }
 
 /* ---------- messages ---------- */
@@ -416,7 +419,7 @@ function start() {
 const VERSION = (/[?&]v=(\d+)/.exec((document.currentScript || {}).src || "") || [])[1] || "";
 let newer = "", checking = false;
 /** The page address's ?… part without the fresh=… marker the reload adds. */
-const withoutFresh = search => search.replace(/([?&])fresh=\d*(&|$)/, (all, before, after) => after ? before : "").replace(/^&/, "?");
+const withoutFresh = search => search.replace(/([?&])fresh=\d*(&|$)/, (all, before, after) => after ? before : "").replace(/^&/, "?").replace(/^\?$/, "");      /* a lone "?" left over goes too */
 async function checkVersion() {
   if (!VERSION || checking) return;
   checking = true;
@@ -430,7 +433,7 @@ async function checkVersion() {
 const busyTyping = () => {
   const a = document.activeElement;
   if (a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable)) return true;
-  return typeof dzUnsaved === "function" && S.data && S.tab === "designs" && S.dz && S.dz.page === "brief" && dzClient() && dzUnsaved(dzClient()).length > 0;
+  return typeof dzWaiting === "function" && !!S.data && dzWaiting().length > 0;      /* brief words that didn't save, whatever tab is open */
 };
 function reloadSoon() {
   if (!newer || dlg.open || saving || busyTyping()) return;           /* tried again when the sheet closes, the typing stops or a save lands */
@@ -441,6 +444,7 @@ function reloadSoon() {
   location.replace(location.pathname + (search ? search + "&" : "?") + "fresh=" + newer + location.hash);
 }
 dlg.addEventListener("close", () => setTimeout(reloadSoon, 0));
+addEventListener("online", () => { if (typeof dzWaiting === "function" && S.data && dzWaiting().length) load(); });    /* back online: read the tracker afresh, which tries brief words that didn't save again (designs.js) */
 document.addEventListener("focusout", () => setTimeout(reloadSoon, 400));
 /* Phone: the pinned top bar gets its hairline once the page has scrolled under it (app.css). */
 const markScrolled = () => document.documentElement.classList.toggle("scrolled", scrollY > 0);
