@@ -9,14 +9,18 @@
  *   - Payments and Expenses tabs: a new row in the next empty row.
  *   - Enquiries tab: a new row from the public form, and the Status, What happened
  *     and Booking ID cells.
- *   - Google Drive: a brief photo, into a "Design photos" folder inside the client's folder.
+ *   - Google Drive: a brief photo, into the client's own folder inside the designs folder
+ *     ("07 Client Designs", script property DESIGNS_FOLDER). The client's folder is named like the
+ *     invoice folders, "005, Pearl", and is made the first time a photo is added.
  *
  * What it never does
  *   - write to a cell that holds a formula (the grey "auto" columns),
  *   - write to Received or Bond on the Money tab (a payment is a row on Payments),
  *   - sort, insert or delete rows on Clients, Money, Event day, Videos, Designs,
  *     Payments or Expenses,
- *   - open any other spreadsheet.
+ *   - open any other spreadsheet,
+ *   - write anything to Google Drive outside the designs folder. The client videos folders
+ *     ("06 Client Videos") are Aadil's alone: the app only links to them.
  *
  * The key is NOT in this file. Run setUp once from the editor. It makes a key and
  * keeps it in Project Settings > Script properties, under KEY.
@@ -33,7 +37,6 @@ const NEXT_BOOKING_ID_CELL = 'C29';           // on the Settings tab
 const REPORTS_RANGE = 'AC5:AH5';              // on the Money tab, used if the report headings can't be found
 const ENQUIRY_LIMIT_PER_HOUR = 15;
 const LOCK_WAIT_MS = 20000;
-const PHOTO_FOLDER = 'Design photos';         // made inside the client's Drive folder
 const PHOTO_MAX_CHARS = 4000000;              // about 3 MB once decoded
 const PHOTOS_SHOWN = 12;
 
@@ -112,6 +115,7 @@ function setUp() {
   console.log('Your key (treat it like a password): ' + key);
   console.log('New-enquiry emails go to: ' + (props.getProperty('ALERT_TO') || 'nobody yet. Add a script property called ALERT_TO.'));
   console.log('Main client videos folder: ' + (props.getProperty('VIDEOS_FOLDER') ? 'set.' : 'not set yet. Add a script property called VIDEOS_FOLDER holding the folder link.'));
+  console.log('Client designs folder: ' + (props.getProperty('DESIGNS_FOLDER') ? 'set.' : 'not set yet. Add a script property called DESIGNS_FOLDER holding the link to 07 Client Designs.'));
   checkTracker();
 }
 
@@ -640,8 +644,8 @@ function setEnquiryStatus_(arg) {
   const cell = heading => values[tab.col[heading] - 1];
 
   if (String(cell('Name')).trim() !== String(arg.name).trim()) throw new Error('The enquiries have moved. Press Refresh and try again.');
-  if (String(cell('What happened')).trim() === 'Moved to bookings') {
-    throw new Error('This enquiry is already booking ' + String(cell('Booking ID')).trim() + '. Change it on the Clients tab.');
+  if (String(cell('What happened')).trim() === 'Moved to bookings' || String(cell('Booking ID')).trim()) {
+    throw new Error('This enquiry is already booking ' + (String(cell('Booking ID')).trim() || 'on the Clients tab') + '. Change it on the Clients tab.');
   }
   ['Status', 'What happened', 'Booking ID'].forEach(heading => {
     if (formulas[tab.col[heading] - 1]) throw new Error(heading + ' on the Enquiries tab holds a formula, so nothing was changed.');
@@ -710,6 +714,9 @@ function nextNumber_(prefix, used, shown) {
 /** Writes one booking into the first empty row, with the next booking ID and invoice number. Nothing is written until every value has passed. */
 function newBooking_(fields, lists) {
   if (!String(fields['Client name'] || '').trim()) throw new Error('A booking needs a client name.');
+  if (String(fields['Custom price'] == null ? '' : fields['Custom price']).trim() !== '' && !/^custom$/i.test(String(fields['Package'] || '').trim())) {
+    throw new Error('A custom price is only for the Custom package.');
+  }
   Object.keys(fields).forEach(heading => {
     if (!has_(CLIENT_FIELDS, heading) && !has_(MONEY_FIELDS, heading)) throw new Error('"' + heading + '" is not a column this app may change.');
   });
@@ -968,10 +975,25 @@ function folderId_(link) {
   return match ? match[1] : '';
 }
 
+/** The designs folder, "07 Client Designs", from the script property DESIGNS_FOLDER. */
+function designsFolder_() {
+  const id = folderId_(PropertiesService.getScriptProperties().getProperty('DESIGNS_FOLDER') || '');
+  if (!id) throw new Error('The designs folder isn’t set up yet. Tell Aadil: add a script property called DESIGNS_FOLDER holding the link to 07 Client Designs.');
+  try { return DriveApp.getFolderById(id); } catch (err) { throw new Error('Couldn’t open the designs folder. Tell Aadil to check DESIGNS_FOLDER in the script properties.'); }
+}
+
+/** True when the folder sits directly inside the designs folder. */
+function inDesigns_(folder, designs) {
+  const parents = folder.getParents();
+  while (parents.hasNext()) if (parents.next().getId() === designs.getId()) return true;
+  return false;
+}
+
 /**
  * arg = {row, id, name, mime, data}. data is the picture as base64 text.
- * Saves it in a "Design photos" folder inside the client's Drive folder (Videos > Drive folder link)
- * and keeps that folder's link in Designs > Photos link.
+ * Saves it in the client's own folder inside the designs folder, named like the invoice folders: "005, Pearl"
+ * (the last three digits of the invoice number, a comma, the client's name). The folder is made the first time,
+ * and its link is kept in Designs > Photos link. A link there to a folder anywhere else is never written to.
  */
 function addBriefPhoto_(arg) {
   const row = bookingRow_(arg), mime = String(arg.mime || ''), data = String(arg.data || '');
@@ -979,17 +1001,22 @@ function addBriefPhoto_(arg) {
   if (!data) throw new Error('The picture arrived empty. Try again.');
   if (data.length > PHOTO_MAX_CHARS) throw new Error('That picture is too big. Try a smaller one.');
 
-  const videos = sideTab_(TAB.videos), designs = sideTab_(TAB.designs);
-  const clientFolder = folderId_(links_(videos, 'Drive folder link', row, 1)[0] || '');
-  if (!clientFolder) throw new Error('This client has no Drive folder yet. Put their folder link on the Videos tab of the tracker, then try again.');
+  const clients = bookingTab_(TAB.clients), money = sideTab_(TAB.money), designs = sideTab_(TAB.designs);
+  const client = tidy_(clients.sheet.getRange(row, need_(clients, 'Client name')).getDisplayValue(), 80).replace(/[\\/]/g, ' ');
+  const invoice = String(money.sheet.getRange(row, need_(money, 'Invoice no.')).getDisplayValue()).trim();
+  const number = /^INV-(\d+)$/.exec(invoice);
+  if (!number) throw new Error('This booking has no invoice number yet, so its designs folder can’t be named. Add it on the Money tab, then try again.');
+  const name = number[1].slice(-3) + ', ' + client;
   const linkCell = checked_(designs, row, [{ heading: 'Photos link', type: 'text', text: 'https://drive.google.com' }], lists_())[0];
 
-  const parent = DriveApp.getFolderById(clientFolder), sameName = parent.getFoldersByName(PHOTO_FOLDER);
-  const folder = sameName.hasNext() ? sameName.next() : parent.createFolder(PHOTO_FOLDER);
-  const name = tidy_(arg.name, 80).replace(/[\\/]/g, ' ') || 'Brief photo';
-  const file = folder.createFile(Utilities.newBlob(Utilities.base64Decode(data), mime, name));
-  linkCell.text = folder.getUrl();
-  writeValue_(linkCell);
+  const top = designsFolder_();
+  let folder = null;
+  const linked = folderId_(links_(designs, 'Photos link', row, 1)[0] || '');
+  if (linked) { try { const f = DriveApp.getFolderById(linked); if (inDesigns_(f, top)) folder = f; } catch (err) { /* gone: find or make it below */ } }
+  if (!folder) { const same = top.getFoldersByName(name); folder = same.hasNext() ? same.next() : top.createFolder(name); }
+
+  const file = folder.createFile(Utilities.newBlob(Utilities.base64Decode(data), mime, tidy_(arg.name, 80).replace(/[\\/]/g, ' ') || 'Brief photo'));
+  if (folderId_(links_(designs, 'Photos link', row, 1)[0] || '') !== folder.getId()) { linkCell.text = folder.getUrl(); writeValue_(linkCell); }
   return { photo: { id: file.getId(), name: file.getName() }, folder: folder.getUrl() };
 }
 

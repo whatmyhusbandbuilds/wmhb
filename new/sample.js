@@ -82,12 +82,14 @@ function demoServer(fn, arg) {
   const book = fields => { row = next(db.bookings.map(b => b.row)); id = ref("B", row - 4); invoice = ref("INV", next(db.bookings.map(b => +b.invoice.slice(4)))); db.bookings.push(Object.assign({}, blank, { row, id, invoice, eventDay: { hours: "3" }, videos: {}, designs: {} }, fields)); };
   if (fn === "setEnquiryStatus") {
     const q = db.enquiries.find(x => x.row === arg.row && x.name === arg.name); if (!q) throw told("That enquiry is no longer there. Press Refresh.");
+    if (q.what === "Moved to bookings" || q.bookingId) throw told("This enquiry is already booking " + (q.bookingId || "on the Clients tab") + ". Change it on the Clients tab.");
     q.status = arg.status; q.what = arg.status === "Cancelled" ? "Cancelled" : ""; q.bookingId = "";
     if (arg.status === "Waiting on deposit") {
       book({ client: q.name, date: arg.eventDate || parseLoose(q.date) || "", phone: (/^Phone\s+(.+)/.exec(q.contact) || [])[1] || "", insta: (/^Instagram\s+(.+)/.exec(q.contact) || [])[1] || "", type: q.type, venue: ((/venue:\s*([^\n]+)/i.exec(q.message) || [])[1] || "").trim() });
       q.what = "Moved to bookings"; q.bookingId = id;
     }
   } else if (fn === "addBooking") {
+    if (arg["Custom price"] && !/^custom$/i.test(arg["Package"] || "")) throw told("A custom price is only for the Custom package.");
     book({ client: arg["Client name"], date: arg["Event date"], phone: arg["Phone"] || "", email: arg["Email"] || "", insta: arg["Instagram"] || "", source: arg["How they found us"] || "", type: arg["Event type"] || "", venue: arg["Venue"] || "", suburb: arg["Suburb"] || "", region: arg["Region"] || "", pkg: arg["Package"], customPrice: num(arg["Custom price"]) });
   } else if (fn === "addPayment") {
     if (!db.bookings.some(b => b.invoice === arg.invoice)) throw told("No booking has the invoice number " + arg.invoice + ". Press Refresh and try again.");
@@ -128,7 +130,7 @@ function demoServer(fn, arg) {
       bond: of(db.payments, b.invoice, "Bond back") ? "Returned" : of(db.payments, b.invoice, "Bond in") ? "Held" : "", costs: of(db.expenses, b.invoice)
     });
   });
-  const who = inv => (db.bookings.find(b => b.invoice === inv) || {}).client || "";
+  const who = inv => inv ? (db.bookings.find(b => b.invoice === inv) || {}).client || "" : "";
   const income = db.payments.filter(p => p.what === "Hire").reduce((s, p) => s + p.amount, 0), spent = db.expenses.reduce((s, x) => s + x.amount, 0);
   const held = db.payments.reduce((s, p) => s + (p.what === "Bond in" ? p.amount : p.what === "Bond back" ? -p.amount : 0), 0);
   /* the Prices tab as it reads in tracker v3: packages with headings in row 5 (columns B to P), booking terms in rows 28 to 31 */

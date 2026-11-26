@@ -4,16 +4,20 @@
    This file gets the brief ready for a style, shrinks wording that is too long, puts the pieces on the page,
    and turns them into PNG files in the browser. */
 
-/* ---------- sizes. The first five are from the design and still to be confirmed by Aadil (HANDOVER, "Still open"). ---------- */
-const SCREEN_PX = [1920, 1080];                  /* a screen picture for the guestbook laptop */
-const STICKERS = {                               /* the biggest each sticker can be, in mm, and where its zone starts down the board plane (px) */
-  top: { w: 650, h: 200, y: 516 },
-  bottom: { w: 650, h: 450, y: 2022 }
-};
-const STICKER_X = 912;                           /* both zones are centred on this line of the board plane (px) */
-const PRINT_DPI = 150;                           /* sticker files */
-const MM = 1.2;                                  /* on the board plane 1 mm is 1.2 px: the board is 1 m wide, and 1200 px wide on the plane */
+/* ---------- sizes ---------- */
+const SCREEN_PX = [1920, 1080];                  /* a screen picture for the guestbook laptop: still to be confirmed by Aadil */
+const PRINT_DPI = 150;                           /* sticker files: the file type is still to be confirmed by Aadil */
 const PLANE = [1800, 3000];                      /* the board plane, which matches the front photo */
+/* The inside of the board's frame, measured on the front photo, in board-plane px. Aadil (26 Nov 2026): it is 700 mm wide.
+   So the frame is the ruler for the stickers: 1 mm on the board is FRAME.w / 700 px on the plane. */
+const FRAME = { x: 447, y: 453, w: 930, h: 2124, mm: 700 };
+const MM = FRAME.w / FRAME.mm;
+const STICKER_X = FRAME.x + FRAME.w / 2;         /* both stickers are centred across the board: 650 mm wide leaves 25 mm each side */
+const CLEAR = 40;                                /* each sticker keeps at least 40 mm from the frame at the top and bottom (Aadil, 26 Nov 2026) */
+const STICKERS = {                               /* the biggest each sticker can be, in mm (Aadil, 26 Nov 2026), and where its zone starts down the plane (px) */
+  top: { w: 650, h: 200, y: Math.max(516, FRAME.y + CLEAR * MM) },                       /* where the design puts it, which is clear of the frame */
+  bottom: { w: 650, h: 450, y: FRAME.y + FRAME.h - (CLEAR + 450) * MM }                  /* as low as it can go, 40 mm above the frame */
+};
 const BOARD_PX = [1080, 1800];                   /* the two board photos */
 /* The design kit's matrices (section 8): the sticker plane seen at an angle, and the board's screen in each view. */
 const M_ANGLE = [0.99661988, 0.096063979, 0, 8.2348335e-05, 0.013639357, 1.0535973, 0, 1.3101167e-05, 0, 0, 1, 0, 30.728791, -18.569045, 0, 1];

@@ -227,7 +227,16 @@ async function setStatus(i, status, eventDate) {
   });
   if (closes) hide();
   const res = await saved;
-  if (!res) return;
+  if (!res) {
+    /* it didn't save: if the sheet closed for it, open it again where it was, with the reason in it (as Add a booking does) */
+    const now = itemOf(i.id);
+    if (closes && now && !dlg.open) {
+      const said = $("#toast").textContent;
+      if (eventDate !== undefined && !i.date) { askDate(now); if (eventDate) { $("#edate").value = eventDate; $("#mk").disabled = false; } } else openPicker(now);
+      $("#err").textContent = said;
+    }
+    return;
+  }
   toast(status === "Waiting on deposit" ? i.name + " is now a booking" + (res.invoice ? ", " + res.invoice : "") + ", waiting on deposit." : status === "Cancelled" ? i.name + "’s enquiry is cancelled." : i.name + ": " + status.toLowerCase() + ".");
 }
 
@@ -241,7 +250,7 @@ function newFields() {
       f("Venue", "text", "Venue"), f("Suburb", "text", "Suburb"),
       f("Region", "pick", "Region", { options: L["Region"] || [], blank: "Choose" }),
       f("Package", "pick", "Package", { options: (S.data.packages || []).map(p => p.name), blank: "Choose" }),
-      f("Custom price", "num", "Custom price ($)", { hint: "Only for the Custom package." }),
+      f("Custom price", "num", "Custom price ($)", { only: "Custom" }),
       f("Phone", "text", "Phone", { type: "tel" }), f("Email", "text", "Email", { type: "email" }), f("Instagram", "text", "Instagram"),
       f("How they found us", "pick", "How they found us", { options: L["How they found us"] || [], blank: "Not sure" })
     ],
@@ -252,7 +261,8 @@ function newFields() {
     extras: [
       f("Host hours", "num", "Host hours"), f("Extra hours", "num", "Extra hours"), f("Extra days", "num", "Extra days"),
       f("Travel fee", "num", "Travel fee ($)"), f("Discount", "num", "Discount ($)")
-    ]
+    ],
+    notes: [f("Notes", "long", "Notes", { wide: true })]
   };
 }
 let form = null;
@@ -263,8 +273,10 @@ function control(f) {
   const c = f.kind === "pick" ? "<select" + at + "><option value=\"\">" + esc(f.blank) + "</option>" + f.options.map(o => "<option" + (o === v ? " selected" : "") + ">" + esc(o) + "</option>").join("") + "</select>"
     : f.kind === "date" ? "<input" + at + " type=\"date\" value=\"" + esc(v) + "\">"
     : f.kind === "num" ? "<input" + at + " type=\"number\" inputmode=\"decimal\" min=\"0\" step=\"any\" value=\"" + esc(v) + "\">"
+    : f.kind === "long" ? "<textarea" + at.replace("class=\"inp", "class=\"inp long") + " rows=\"3\" maxlength=\"1000\">" + esc(v) + "</textarea>"
     : "<input" + at + " type=\"" + (f.type || "text") + "\" autocomplete=\"off\" value=\"" + esc(v) + "\">";
-  return "<div class=\"fld" + (f.wide ? " wide" : "") + "\">" + lab + c + hint + "</div>";
+  /* only = a box that is only for one package (Custom price): it shows once that package is picked */
+  return "<div class=\"fld" + (f.wide ? " wide" : "") + "\"" + (f.only ? " data-only=\"" + esc(f.only) + "\"" + (sameWords(form.values["Package"], f.only) ? "" : " hidden") : "") + ">" + lab + c + hint + "</div>";
 }
 /** values and problem are only given when a save failed, so nothing typed is lost. */
 function openNew(values, problem) {
@@ -274,6 +286,7 @@ function openNew(values, problem) {
     "<form id=\"frm\" novalidate><div class=\"fields lp2\" style=\"margin-top:16px\">" + fields.main.map(control).join("") + "</div>" +
     "<h3 class=\"fh\">Extras</h3><div class=\"ticks\">" + fields.ticks.map(control).join("") + "</div>" +
     "<div class=\"fields two\" style=\"margin-top:12px\">" + fields.extras.map(control).join("") + "</div>" +
+    "<div class=\"fields\" style=\"margin-top:12px\">" + fields.notes.map(control).join("") + "</div>" +
     "<p class=\"err\" id=\"err\" role=\"alert\">" + esc(problem || "") + "</p><button class=\"btn big save\" type=\"submit\">Save booking</button></form><button class=\"btn line cancel\" type=\"button\" data-do=\"close\">Cancel</button>", "wide");
   dlg.setAttribute("aria-label", "Add a booking");
 }
@@ -282,6 +295,7 @@ dlg.addEventListener("submit", async e => {
   const out = Object.assign({}, form.values);
   $$("[data-key]", dlg).forEach(el => { if (el.tagName !== "BUTTON") { const v = el.value.trim(); if (v !== "") out[el.dataset.key] = v; else delete out[el.dataset.key]; } });
   if (!out["Client name"] || !out["Event date"] || !out["Package"]) { $("#err").textContent = "A new booking needs a client name, an event date and a package."; return; }
+  if (!sameWords(out["Package"], "Custom")) delete out["Custom price"];          /* a custom price is only for the Custom package */
   hide();
   const pkg = (S.data.packages || []).find(p => p.name === out["Package"]), total = num(out["Custom price"]) || (pkg && pkg.price) || 0;
   const res = await save("addBooking", out, data => {
@@ -289,6 +303,12 @@ dlg.addEventListener("submit", async e => {
   });
   if (res) toast("Added " + out["Client name"] + (res.invoice ? " as " + res.invoice : "") + ".");
   else if (!dlg.open) { const said_ = $("#toast").textContent; openNew(out, said_); }
+});
+
+/* the Custom price box shows only while the Custom package is picked */
+dlg.addEventListener("change", e => {
+  if (sheetKind !== "new" || !e.target.matches("[data-key=Package]")) return;
+  $$("[data-only]", dlg).forEach(box => { box.hidden = !sameWords(e.target.value, box.dataset.only); });
 });
 
 /* ---------- taps ---------- */

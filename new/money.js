@@ -192,7 +192,7 @@ dlg.addEventListener("submit", async e => {
   const kept = Object.assign({}, cost, { what, amount: $("#c-amount").value });
   hide();
   const res = await save("addExpense", out, data => {
-    const b = data.bookings.find(x => x.invoice === out.invoice);
+    const b = out.invoice ? data.bookings.find(x => x.invoice === out.invoice) : null;      /* "No client" has no invoice number: it belongs to no booking */
     data.expenses.push({ row: -Date.now(), date: todayIso(), what, type: out.type, amount, invoice: out.invoice, client: b ? b.client : "", notes: "" });
     data.reports = null;
   });

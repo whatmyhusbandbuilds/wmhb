@@ -247,9 +247,13 @@ function dzLoadPhotos(b, again) {
   if (!link) return;
   const row = b.row;
   server("getBriefPhotos", { row, id: b.id }).then(res => {
-    box.list = box.list.concat((res.photos || []).filter(p => !box.list.some(x => x.id === p.id)).map(p => { const blob = photoBlob(p.data, p.mime); return { id: p.id, name: p.name, blob, url: URL.createObjectURL(blob) }; }));
+    (res.photos || []).forEach(p => {
+      if (box.list.some(x => x.id === p.id)) return;
+      try { const blob = photoBlob(p.data, p.mime); box.list.push({ id: p.id, name: p.name, blob, url: URL.createObjectURL(blob) }); }
+      catch (x) { /* a photo that can't be read is left out; the rest still show */ }
+    });
     box.state = "ready"; box.read = true;
-  }, () => { box.state = "failed"; }).then(() => dzPhotosChanged(row));
+  }).catch(() => { box.state = "failed"; }).then(() => dzPhotosChanged(row));
 }
 function dzPhotosChanged(row) {
   if (S.tab !== "designs" || S.dz.row !== row || !S.data) return;
@@ -278,7 +282,10 @@ async function dzAddPhoto(row, file) {
     item.saving = false; item.id = res.photo ? res.photo.id : "";
     const now = eventAt(row); if (now && res.folder) designOf(now).photos = res.folder;
   } catch (x) {
-    box.list.splice(box.list.indexOf(item), 1); URL.revokeObjectURL(item.url);
+    /* take it off the list on screen now, which may have been read again while it was saving */
+    const list = (S.dzPhotos[row] || box).list, at = list.indexOf(item);
+    if (at >= 0) list.splice(at, 1);
+    URL.revokeObjectURL(item.url);
     toast("That photo didn’t save. " + why(x));
   }
   dzPhotosChanged(row);

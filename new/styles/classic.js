@@ -9,13 +9,18 @@
      words    b.names, b.line2, b.wording (default screen), b.thanks (thank you screen), b.tap ("Tap to start")
               b.stack (the names one under the other), b.dots (the second line as 19 . 12 . 2026 when it is a date)
               b.wordingLines(n), b.wordingLower(n), b.wordingUpper(n): the wording over n lines
-     colours  b.main, b.paper, b.accent from the theme colours, b.ink for dark wording, and ready-checked pairs such as
-              b.onMain (readable on the main colour) and b.accentOnBoard (readable on the white board)
+     colours  b.main, b.paper, b.accent from the theme colours, b.ink for dark wording, b.night for the Night background,
+              and colours already checked to be readable on a background:
+                on the main colour   b.onMain, b.inkOnMain
+                on the paper         b.accentOnPaper, b.mainOnPaper
+                on the night         b.onNight, b.accentOnNight
+                on the white board   b.accentOnBoard, b.mainOnBoard
+              (any other colour a style wants can be checked with readOn(background, colour, ...) from art.js)
      photo    b.photo fills the box it is put in
 
    screen(kind, b) gives one screen: kind is "default", "video" or "thanks". It returns the background and the HTML.
      Sizes are in em, and 100em is the width of the screen, so it looks the same small on the wheel and full size as a PNG.
-   board(b) gives the two stickers, top and bottom. Sizes are in px, and 1.2 px is 1 mm on the board.
+   board(b) gives the two stickers, top and bottom. Sizes are in px, and about 1.33 px is 1 mm on the board (MM in art.js).
      Each sticker is centred in its zone and shrinks as a whole if it is too big for it.
 
    Helpers from art.js: ART.cam (camera icon), ART.live (where the live camera shows), ART.middle (things centred, one under
