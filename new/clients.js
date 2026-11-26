@@ -64,8 +64,10 @@ const ymKey = () => isoOf(S.ym[0], S.ym[1], 1).slice(0, 7);
 const inMonth = i => i.date && i.date.slice(0, 7) === ymKey();
 const clashes = i => i.date && S.clash.has(i.date) && S.clash.get(i.date).includes(i);
 const itemOf = id => S.items.find(i => i.id === id);
+/** Where a booking or an enquiry is up to, in words. */
+const statusWords = i => i.kind === "booked" ? (i.owing > 0 ? "Booked (" + money(i.owing) + " to pay)" : "Booked (paid)") : i.kind === "waiting" ? "Waiting on deposit" : i.status === "New" ? "Enquiry: new" : "Enquiry: waiting on response";
 function badges(i) {
-  const t = i.kind === "booked" ? (i.owing > 0 ? "Booked (" + money(i.owing) + " to pay)" : "Booked (paid)") : i.kind === "waiting" ? "Waiting on deposit" : i.status === "New" ? "Enquiry: new" : "Enquiry: waiting on response";
+  const t = statusWords(i);
   return "<span class=\"badge " + i.kind + "\">" + esc(t) + "</span>" + (clashes(i) ? "<span class=\"badge clashb\">Clash</span>" : "");
 }
 /* In a sentence a name loses any note in brackets: "Jess (example)" reads as "Jess". */
@@ -148,11 +150,13 @@ function drawCal() {
   for (let c = 0; c < cells; c++) {
     const iso = addDays(start, c), p = dParts(iso), out = p.m !== m;
     const its = (!out && byDay.get(iso)) || [], clash = !out && S.clash.has(iso), q = its.find(i => !i.booking);
-    const cls = (out ? " out" : "") + (iso === today ? " today" : "") + (its.some(i => i.kind === "booked") ? " booked" : "");      /* a booked day: the whole tile is green */
+    const cls = (out ? " out" : "") + (iso === today ? " today" : "") + (!out && iso < today ? " past" : "");      /* days already gone are dulled, with whatever is on them */
     if (P) {
       const inner = "<span class=\"num " + (its.length ? its[0].kind : "") + "\">" + p.d + "</span><span class=\"nm\">" + (its.length ? esc(its[0].short) + (its.length > 1 ? " +" + (its.length - 1) : "") : "") + "</span>";
       const bang = clash ? "<span class=\"bang\" role=\"img\" aria-label=\"Clash\">!</span>" : "";
-      h += "<div class=\"pc wm-cell" + cls + "\">" + (q ? "<button type=\"button\" class=\"pcb\" data-do=\"item\" data-item=\"" + q.id + "\" data-fid=\"c-" + iso + "\" aria-haspopup=\"dialog\" aria-label=\"Change the status of " + esc(q.name) + ", " + fmt(iso) + (its.length > 1 ? ". Also that day: " + esc(its.filter(i => i !== q).map(i => i.name + ", " + word(i)).join("; ")) : "") + "\">" + inner + "</button>"
+      /* more than one thing on a day: the day opens a sheet with all of them (the day alone used to reach only the first enquiry) */
+      if (its.length > 1) h += "<div class=\"pc wm-cell" + cls + "\"><button type=\"button\" class=\"pcb\" data-do=\"day\" data-day=\"" + iso + "\" data-fid=\"c-" + iso + "\" aria-haspopup=\"dialog\" aria-label=\"" + its.length + " things on " + fmt(iso) + ": " + esc(its.map(i => i.name + ", " + word(i)).join("; ")) + "\">" + inner + "</button>" + bang + "</div>";
+      else h += "<div class=\"pc wm-cell" + cls + "\">" + (q ? "<button type=\"button\" class=\"pcb\" data-do=\"item\" data-item=\"" + q.id + "\" data-fid=\"c-" + iso + "\" aria-haspopup=\"dialog\" aria-label=\"Change the status of " + esc(q.name) + ", " + fmt(iso) + "\">" + inner + "</button>"
         : inner + (its.length ? "<span class=\"sr\">" + esc(its.map(word).join(", ")) + "</span>" : "")) + bang + "</div>";
     } else {
       h += "<div class=\"lc" + cls + (its.length ? " has" : "") + "\"><div class=\"dn\">" + p.d + "</div>" + its.map(i => i.booking
@@ -196,6 +200,18 @@ function enquiryHead(i) {
   return "<div class=\"pk-k\">Enquiry</div><h2 id=\"dlg-title\" tabindex=\"-1\">" + esc(i.name) + "</h2><p class=\"pk-e\">" + esc([i.type, i.venue, when].filter(Boolean).join(", ")) + "</p>" + (i.contact ? "<p class=\"pk-c\">" + esc(i.contact) + "</p>" : "");
 }
 let picked = "";                         /* the enquiry the picker is showing */
+/**
+ * A day with more than one thing on it (two enquiries, or a booking and an enquiry): everything on it, each with its name,
+ * where it is up to, and a Change button. An enquiry's Change opens its status, as in the list; a booking's opens its
+ * payments, which is where a booking changes.
+ */
+function openDay(iso) {
+  const its = S.items.filter(i => i.date === iso && match(i)); if (!its.length) return;
+  show("day", "<h2 id=\"dlg-title\" tabindex=\"-1\" class=\"tight\">" + esc(fmt(iso)) + "</h2><p class=\"sub\">" + its.length + " on this day" + (S.clash.has(iso) ? ", a clash" : "") + "</p>" +
+    its.map(i => "<div class=\"dayrow\"><span class=\"dot " + i.kind + "\" aria-hidden=\"true\"></span><span class=\"tl\"><span>" + esc(i.name) + "</span><span>" + esc(statusWords(i)) + "</span></span>" +
+      "<button class=\"cardbtn wm-card\" type=\"button\" data-do=\"day-change\" data-item=\"" + i.id + "\" data-fid=\"dc-" + i.id + "\" aria-label=\"Change " + esc(i.name) + "\">Change</button></div>").join("") +
+    "<button class=\"btn big done\" type=\"button\" data-do=\"close\">Done</button>");
+}
 function openPicker(i) {
   picked = i.id;
   const others = i.date && S.clash.has(i.date) ? S.clash.get(i.date).filter(o => o.id !== i.id) : [];
@@ -319,6 +335,8 @@ Object.assign(TAPS, {
   "tick": el => { S.f[el.dataset.tick] = !S.f[el.dataset.tick]; filterChanged(); },
   "month": el => { const n = S.ym[0] * 12 + S.ym[1] + +el.dataset.by; S.ym = [Math.floor(n / 12), n % 12]; keepFocus(() => { drawCal(); drawList(); }); },
   "item": el => { const i = itemOf(el.dataset.item); if (i && !i.booking) openPicker(i); },
+  "day": el => openDay(el.dataset.day),
+  "day-change": el => { const i = itemOf(el.dataset.item); if (!i) return; if (i.booking) openClient(i.ref.row); else openPicker(i); },
   "opt": el => setStatus(itemOf(picked), el.dataset.opt),
   "make": el => setStatus(itemOf(picked), "Waiting on deposit", el.dataset.skip != null ? "" : $("#edate").value),
   "new": () => openNew(),

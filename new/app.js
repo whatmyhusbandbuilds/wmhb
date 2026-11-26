@@ -271,11 +271,75 @@ const SHEETS = {};                    /* a sheet may add { sync() } here, to kee
 let sheetKind = "";
 const GRAB = "<div class=\"grab\" aria-hidden=\"true\"></div>";
 function show(kind, html, cls) {
-  sheetKind = kind; dlg.className = "wm-sheet" + (cls ? " " + cls : ""); dlg.innerHTML = GRAB + html;
-  if (!dlg.open) { dlg.showModal(); dlg.scrollTop = 0; }
+  sheetKind = kind; dlg.className = "wm-sheet" + (cls ? " " + cls : "") + (dlg.open && dlg.classList.contains("held") ? " held" : ""); dlg.innerHTML = GRAB + html;      /* a sheet that has been swiped and sprung back doesn't slide in again when it is redrawn */
+  if (!dlg.open) { lockPage(); dlg.showModal(); dlg.scrollTop = 0; }
 }
-function hide() { if (dlg.open) dlg.close(); }
-dlg.addEventListener("close", () => { sheetKind = ""; dlg.innerHTML = ""; });
+function hide() { if (dlg.open) { dlg.close(); unlockPage(); } }        /* the page is let go at once: what is tapped next may scroll it */
+dlg.addEventListener("close", () => { sheetKind = ""; dlg.innerHTML = ""; dlg.removeAttribute("style"); unlockPage(); });   /* Escape closes it without hide() */
+/* While a sheet is open the page behind it never moves: it is held where it was, and put back exactly there when the sheet
+   closes. (The sheet's own scrolling stays inside it: overscroll-behavior in app.css.) */
+let pageAt = null;
+function lockPage() {
+  if (pageAt !== null) return;
+  const root = document.documentElement, bar = innerWidth - root.clientWidth;      /* a laptop's scroll bar goes while it is held: the page keeps its width */
+  pageAt = scrollY; root.classList.add("held"); if (bar > 0) root.style.paddingRight = bar + "px";
+}
+function unlockPage() {
+  if (pageAt === null) return;
+  const root = document.documentElement, y = pageAt; pageAt = null;
+  root.classList.remove("held"); root.style.paddingRight = ""; scrollTo(0, y);
+}
+/** Where the page is scrolled to, even while a sheet holds it. */
+const pageY = () => pageAt === null ? scrollY : pageAt;
+
+/* ---------- swipe a sheet down to close it (phone; the laptop's centred box stays as it is) ----------
+   Drag the grab bar, or drag anywhere on the sheet when its content is at the top: it follows the finger 1:1. Dragging up
+   past its open position resists. Let go after more than a quarter of its height, or with a quick flick down, and it slides
+   off the bottom at the finger's speed and closes; otherwise it springs back up. With reduced motion it fades. */
+const drag = { armed: false, on: false, outside: false, grab: false, leaving: false, start: 0, last: 0, at: 0, v: 0, dy: 0, h: 0 };
+const pull = d => -40 * (1 - 1 / (d / 90 + 1));                       /* past the open position: a rubber band, at most 40 px */
+dlg.addEventListener("touchstart", e => {
+  if (!dlg.open || !phone() || e.touches.length !== 1 || drag.leaving) return;
+  const t = e.touches[0], r = dlg.getBoundingClientRect();
+  drag.outside = t.clientY < r.top;                                     /* on the dark layer above the sheet */
+  drag.grab = t.clientY - r.top < 26 || !!(e.target.closest && e.target.closest(".grab"));    /* the grab bar, or the strip it sits in */
+  drag.armed = !drag.outside && (drag.grab || dlg.scrollTop <= 0);
+  drag.on = false; drag.start = drag.last = t.clientY; drag.at = e.timeStamp; drag.v = 0; drag.dy = 0; drag.h = r.height;
+}, { passive: true });
+dlg.addEventListener("touchmove", e => {
+  if (!dlg.open) return;
+  if (drag.outside) { if (e.cancelable) e.preventDefault(); return; }  /* a drag on the dark layer never scrolls the page */
+  if (!drag.armed || e.touches.length !== 1) return;
+  const y = e.touches[0].clientY, dy = y - drag.start;
+  if (!drag.on) {
+    if (Math.abs(dy) < 6) return;
+    if (dy < 0 && !drag.grab) { drag.armed = false; return; }           /* up on the content: it scrolls as usual */
+    drag.on = true; dlg.classList.add("held");
+  }
+  if (e.cancelable) e.preventDefault();
+  if (e.timeStamp > drag.at) drag.v = (y - drag.last) / (e.timeStamp - drag.at);
+  drag.last = y; drag.at = e.timeStamp; drag.dy = dy;
+  dlg.style.transition = "none"; dlg.style.transform = "translateY(" + (dy >= 0 ? dy : pull(-dy)) + "px)";
+}, { passive: false });
+const dragEnd = e => {
+  const was = drag.on; drag.on = false; drag.armed = false; drag.outside = false;
+  if (!was || !dlg.open) return;
+  const v = e.timeStamp - drag.at > 100 ? 0 : drag.v;                  /* the finger stopped before it let go: no flick */
+  if (drag.dy > drag.h * 0.25 || (v > 0.5 && drag.dy > 10)) closeSheetDown(v);
+  else { dlg.style.transition = matchMedia("(prefers-reduced-motion:reduce)").matches ? "none" : "transform 380ms cubic-bezier(.32,.72,0,1)"; dlg.style.transform = "translateY(0)"; }      /* back up */
+};
+dlg.addEventListener("touchend", dragEnd); dlg.addEventListener("touchcancel", dragEnd);
+/** Slides an open sheet off the bottom, the way it came in, at the finger's speed (px per ms), then closes it. */
+function closeSheetDown(v) {
+  if (matchMedia("(prefers-reduced-motion:reduce)").matches) {
+    dlg.style.transition = "opacity 200ms ease"; dlg.style.opacity = "0"; drag.leaving = true;
+    setTimeout(() => { drag.leaving = false; hide(); }, 210); return;
+  }
+  const from = Math.max(0, drag.dy), to = dlg.getBoundingClientRect().height + 40, fast = v > 0.3;
+  const ms = fast ? Math.max(120, Math.min(360, (to - from) / v)) : 280;
+  dlg.style.transition = "transform " + ms + "ms " + (fast ? "linear" : "cubic-bezier(.32,.72,0,1)"); dlg.style.transform = "translateY(" + to + "px)"; drag.leaving = true;
+  setTimeout(() => { drag.leaving = false; hide(); }, ms + 20);
+}
 
 /* ---------- talking to the tracker ---------- */
 async function server(fn, arg) {
@@ -380,7 +444,7 @@ function say(msg) { const slot = dlg.open && $("#err", dlg); if (slot) slot.text
 
 /* ---------- taps ---------- */
 const TAPS = {
-  "tab": el => { const screen = SCREENS[el.dataset.tab]; if (screen && screen.reset) screen.reset(); go(el.dataset.tab); if (menuOpen()) menu(false); },
+  "tab": el => { const screen = SCREENS[el.dataset.tab]; if (screen && screen.reset) screen.reset(); S.backTo = null; go(el.dataset.tab); if (menuOpen()) menu(false); },      /* a tab chosen from the menu forgets any way back */
   "menu-open": () => menu(true),
   "menu-close": () => menu(false),
   "close": () => hide(),
