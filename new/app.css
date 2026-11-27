@@ -173,7 +173,6 @@ h1{margin:16px 0 0;font-size:36px;font-weight:900;letter-spacing:-.05em;line-hei
 .dow{font-size:12px;font-weight:700;color:var(--mute);text-align:center;padding-bottom:4px}
 .pc{position:relative;height:60px;border-radius:4px;background-color:#2C2A23}
 .pc.out{background-color:#191815}
-.pc.today{background-color:rgba(241,194,45,.26)}
 .pcb{display:block;width:100%;height:60px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--text)}
 .num{display:block;width:34px;height:34px;margin:2px auto 0;border-radius:50%;border:2px solid transparent;font-size:16px;font-weight:600;line-height:30px;text-align:center}
 .out .num{color:#9A9584}
@@ -324,7 +323,6 @@ select.inp option{background:#27251F;color:var(--text)}
   .key{padding:12px 0 0}
   .lc{position:relative;min-height:88px;padding:7px;border:1.5px solid var(--line);border-radius:4px;background:#2C2A23}
   .lc.out{background:#191815}
-  .lc.today{background:rgba(241,194,45,.26)}
   .lc.has{border-color:var(--text)}
   .lc .dn{font-size:15px;font-weight:600}
   .lc.has .dn{font-weight:800}
