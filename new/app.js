@@ -39,7 +39,7 @@ const RULER = (() => { let p = "M0 0h500v6H0zM0 0h6v57h-6z"; for (let x = 22, k 
 const LOGO = "<div class=\"logo\" role=\"img\" aria-label=\"wmhb\"><div>wmhb</div><svg aria-hidden=\"true\" width=\"52\" height=\"8\" viewBox=\"0 0 500 57\"><path d=\"" + RULER + "\"/></svg></div>";
 
 /* ---------- what the app knows ---------- */
-const S = { tab: "clients", data: null, readAt: 0, trouble: "", T: null, payBy: {} };
+const S = { tab: "clients", data: null, readAt: 0, trouble: "", T: null, payBy: {}, payAll: {} };
 
 /* ---------- names ---------- */
 /* "Glow Studio (Mia)" is a business with its contact in brackets. */
@@ -157,6 +157,78 @@ function moneyOf(b) {
   return { kind, done: st === "Completed", date, total, received, owing, next, plan, balanceDue, bond, bondAmount: T.bond, bondHeld: bond === "held" ? (bondIn - bondBack > 0 ? bondIn - bondBack : num(T.bond)) : 0 };
 }
 const live = b => txt(b.client) && txt(b.status) !== "Cancelled" && txt(b.cancelled) !== "Yes";
+/** The rows of Payments and Expenses that count: a removed row stays in the tracker, marked with the day it was removed. */
+const kept = list => (list || []).filter(x => !x.removed);
+/**
+ * After a change on this phone, a booking's money as the tracker's formulas will work it out (it answers a moment later):
+ * Received from its Hire payments, Owing, the bond, and its status (Cancelled, then the status set by hand, then the money).
+ */
+function recount(data, invoice) {
+  const b = (data.bookings || []).find(x => x.invoice === invoice); if (!b || !invoice) return;
+  const pays = kept(data.payments).filter(p => p.invoice === invoice), of = what => sum(pays.filter(p => p.what === what));
+  b.received = of("Hire"); b.owing = txt(b.cancelled) === "Yes" ? 0 : Math.max(0, num(b.total) - b.received);
+  b.bond = of("Bond back") > 0 ? "Returned" : of("Bond in") > 0 ? "Held" : "";
+  const T = S.T || readTerms(data), auto = !/^\d{4}-\d{2}-\d{2}$/.test(txt(b.date)) ? "Date needed" : b.received < num(T.smallestDeposit) ? "Waiting on deposit" : b.date < todayIso() ? "Completed" : "Booked";
+  b.status = txt(b.cancelled) === "Yes" ? "Cancelled" : txt(b.statusByHand) || auto;
+  data.reports = null;                     /* the tracker's own totals are out of date until it answers */
+}
+
+/* ---------- how a client got in touch: Aadil's seven, each with a one-colour icon ---------- */
+const SOURCE_ICON = {
+  "Instagram": '<rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle class="fill" cx="17.3" cy="6.7" r="1.2"/>',
+  "Messenger": '<path d="M12 3.5c-4.8 0-8.5 3.5-8.5 8.1 0 2.5 1.1 4.6 2.9 6.1V21l2.9-1.6c.9.3 1.8.4 2.7.4 4.8 0 8.5-3.5 8.5-8.1S16.8 3.5 12 3.5z"/><path d="M7.5 14l3.1-3.3 2.4 2.1 3.5-3.6"/>',
+  "WhatsApp": '<path d="M4.3 19.7l1.2-3.9a8.5 8.5 0 1 1 3.1 3z"/><path d="M9.2 8.2c.1 3.2 3.2 6.4 6.6 6.6l.9-1.6-1.9-1-1 .8c-1-.5-1.9-1.4-2.4-2.4l.8-1-1-1.9z"/>',
+  "TikTok": '<path d="M13.5 3.5v11.3a3.7 3.7 0 1 1-3.7-3.7"/><path d="M13.5 3.5c.5 2.7 2.4 4.6 5 4.8"/>',
+  "Text or call": '<path d="M7 3.7l2.8-.2 1.5 4.1-2 1.4a10.5 10.5 0 0 0 5.7 5.7l1.4-2 4.1 1.5-.2 2.8a2 2 0 0 1-2.1 1.9A16.6 16.6 0 0 1 5.1 5.8 2 2 0 0 1 7 3.7z"/>',
+  "Email": '<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.8 7.2L12 13l8.2-5.8"/>',
+  "Website form": '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.7 2.6 14.3 0 17M12 3.5c-2.6 2.7-2.6 14.3 0 17"/>'
+};
+const SOURCES = Object.keys(SOURCE_ICON);
+const sourceIcon = (name, size) => "<svg class=\"sico\" aria-hidden=\"true\" width=\"" + (size || 16) + "\" height=\"" + (size || 16) + "\" viewBox=\"0 0 24 24\">" + (SOURCE_ICON[name] || "") + "</svg>";
+/** How a booking or an enquiry got in touch: its own column, or for an enquiry with none, its contact text where that is clear. */
+function sourceOf(x, enquiry) {
+  if (txt(x.gotInTouch)) return { source: txt(x.gotInTouch), handle: txt(x.handle) };
+  if (!enquiry) return { source: "", handle: "" };
+  const c = txt(x.contact), insta = /^instagram\s+(@\S+)/i.exec(c), call = /^phone\s+([\d\s()+-]{7,})$/i.exec(c);
+  return insta ? { source: "Instagram", handle: insta[1] } : call ? { source: "Text or call", handle: call[1].trim() }
+    : /^[\d\s()+-]{7,}$/.test(c) ? { source: "Text or call", handle: c } : /^\S+@\S+\.\S+$/.test(c) ? { source: "Email", handle: c } : { source: "", handle: "" };
+}
+/** The small tag: the icon and the name. who = the client's id ("b12", "q5"): then a tap on it changes it. */
+function sourceTag(src, who, inRow) {
+  const inner = src.source ? sourceIcon(src.source, 14) + "<span>" + esc(src.source) + "</span>" : "<span>How they got in touch?</span>";
+  if (!src.source && inRow) return "";
+  /* on a list row the row itself is the button: the tag inside it opens the change, the rest of the row the client */
+  if (inRow) return "<span class=\"stag\" data-src=\"" + who + "\">" + inner + "</span>";
+  return who ? "<button type=\"button\" class=\"stag" + (src.source ? "" : " none") + "\" data-do=\"src-open\" data-who=\"" + who + "\" data-fid=\"src-" + who + "\" aria-haspopup=\"dialog\" aria-label=\"How they got in touch: " + esc(src.source || "not set") + ". Change it\">" + inner + "</button>"
+    : src.source ? "<span class=\"stag\">" + inner + "</span>" : "";
+}
+/* NZ numbers for WhatsApp: 021 555 0101 is +64 21 555 0101 */
+const telOf = n => txt(n).replace(/[^\d+]/g, "");
+const intlOf = n => { const d = telOf(n).replace(/^\+/, ""); return /^0/.test(d) ? "64" + d.slice(1) : d; };
+/**
+ * Every way to reach a client, as rows: [label, what it says, [[link words, address], ...]]. A phone can be called or texted,
+ * an email emailed, and a handle opens its app.
+ */
+function contactRows(x, enquiry) {
+  const src = sourceOf(x, enquiry), rows = [], seen = new Set();
+  const add = (label, value, links) => { const key = label + "|" + value.toLowerCase(); if (!value || seen.has(key)) return; seen.add(key); rows.push([label, value, links]); };
+  const phoneOf = v => [["Call", "tel:" + telOf(v)], ["Text", "sms:" + telOf(v)]];
+  const handle = src.handle, bare = handle.replace(/^@/, "");
+  if (src.source === "Instagram" && handle) add("Instagram", "@" + bare, [["Open", "https://instagram.com/" + encodeURIComponent(bare)]]);
+  if (src.source === "Messenger" && handle) add("Messenger", handle, [["Open", "https://m.me/" + encodeURIComponent(bare)]]);
+  if (src.source === "TikTok" && handle) add("TikTok", "@" + bare, [["Open", "https://www.tiktok.com/@" + encodeURIComponent(bare)]]);
+  if (src.source === "WhatsApp" && handle) add("WhatsApp", handle, [["Open", "https://wa.me/" + intlOf(handle)]]);
+  if (src.source === "Text or call" && handle) add("Phone", handle, phoneOf(handle));
+  if (src.source === "Email" && /@/.test(handle)) add("Email", handle, [["Email", "mailto:" + handle]]);
+  if (!enquiry) {
+    if (txt(x.phone)) add("Phone", txt(x.phone), phoneOf(x.phone));
+    if (txt(x.email)) add("Email", txt(x.email), [["Email", "mailto:" + txt(x.email)]]);
+    if (txt(x.insta)) { const n = txt(x.insta).replace(/^@/, ""); add("Instagram", "@" + n, [["Open", "https://instagram.com/" + encodeURIComponent(n)]]); }
+  } else if (!rows.length && txt(x.contact)) add("Contact", txt(x.contact), []);
+  return rows;
+}
+const contactHtml = rows => rows.map(r => "<div class=\"crow\"><span class=\"cl\">" + esc(r[0]) + "</span><span class=\"cv\">" + esc(r[1]) + "</span><span class=\"ca\">" +
+  r[2].map(l => "<a class=\"cbtn\" href=\"" + esc(l[1]) + "\"" + (/^https:/.test(l[1]) ? " target=\"_blank\" rel=\"noopener\"" : "") + " aria-label=\"" + esc(l[0] + " " + r[1]) + "\">" + esc(l[0]) + "</a>").join("") + "</span></div>").join("");
 /** "Birthday, Sat 12 Dec, INV-0003" and the like. The year shows only when it is not this year. */
 const dayOf = iso => iso ? fmt(iso) + (dParts(iso).y !== +todayIso().slice(0, 4) ? " " + dParts(iso).y : "") : "no date yet";
 
@@ -243,7 +315,11 @@ function go(tab) {
 }
 /** Brings the screen up to date after the data changes, without drawing it all again. */
 function refresh() {
-  if (S.data) { S.T = readTerms(S.data); S.payBy = {}; (S.data.payments || []).forEach(p => (S.payBy[p.invoice] = S.payBy[p.invoice] || []).push(p)); build(S.data); }
+  if (S.data) {
+    S.T = readTerms(S.data); S.payBy = {}; S.payAll = {};
+    (S.data.payments || []).forEach(p => { (S.payAll[p.invoice] = S.payAll[p.invoice] || []).push(p); if (!p.removed) (S.payBy[p.invoice] = S.payBy[p.invoice] || []).push(p); });      /* a removed row stays for History, and counts for nothing */
+    build(S.data);
+  }
   const screen = SCREENS[S.tab];
   if (screen && S.data && $("#view [data-screen=" + S.tab + "]")) keepFocus(() => { drawMenu(); screen.fill(); });
   else keepFocus(() => go(S.tab));
@@ -271,11 +347,14 @@ const SHEETS = {};                    /* a sheet may add { sync() } here, to kee
 let sheetKind = "";
 const GRAB = "<div class=\"grab\" aria-hidden=\"true\"></div>";
 function show(kind, html, cls) {
-  sheetKind = kind; dlg.className = "wm-sheet" + (cls ? " " + cls : "") + (dlg.open && dlg.classList.contains("held") ? " held" : ""); dlg.innerHTML = GRAB + html;      /* a sheet that has been swiped and sprung back doesn't slide in again when it is redrawn */
+  sheetKind = kind; dlg.className = "wm-sheet" + (cls ? " " + cls : "") + (dlg.open && dlg.classList.contains("held") ? " held" : "");
+  const t = $("#toast"); if (t.parentNode === dlg) $("#app").appendChild(t);              /* the message survives the sheet being drawn again */
+  dlg.innerHTML = GRAB + html;      /* a sheet that has been swiped and sprung back doesn't slide in again when it is redrawn */
   if (!dlg.open) { lockPage(); dlg.showModal(); dlg.scrollTop = 0; }
+  placeToast();
 }
-function hide() { if (dlg.open) { dlg.close(); unlockPage(); } }        /* the page is let go at once: what is tapped next may scroll it */
-dlg.addEventListener("close", () => { sheetKind = ""; dlg.innerHTML = ""; dlg.removeAttribute("style"); unlockPage(); });   /* Escape closes it without hide() */
+function hide() { if (dlg.open) { const t = $("#toast"); if (t.parentNode === dlg) $("#app").appendChild(t); dlg.close(); unlockPage(); placeToast(); } }        /* the page is let go at once: what is tapped next may scroll it */
+dlg.addEventListener("close", () => { const t = $("#toast"); if (t.parentNode === dlg) { $("#app").appendChild(t); placeToast(true); } sheetKind = ""; dlg.innerHTML = ""; dlg.removeAttribute("style"); unlockPage(); });   /* Escape closes it without hide(); a message showing in it moves to the page */
 /* While a sheet is open the page behind it never moves: it is held where it was, and put back exactly there when the sheet
    closes. (The sheet's own scrolling stays inside it: overscroll-behavior in app.css.) */
 let pageAt = null;
@@ -431,13 +510,30 @@ async function saveLatest(key, fn, arg, value, get, set) {
 }
 
 /* ---------- messages ---------- */
-let toastTimer;
-function toast(msg) {
-  const t = $("#toast"); t.textContent = msg;
-  try { if (t.showPopover) { if (t.matches(":popover-open")) t.hidePopover(); t.showPopover(); } } catch (e) {}
+let toastTimer, toastUndo = null;
+/**
+ * A message at the bottom. undo = what Undo does: then the message has an Undo button and stays about 8 seconds.
+ * While a sheet is open the message sits inside it, because everything outside an open sheet can't be tapped.
+ */
+function toast(msg, undo) {
+  const t = $("#toast"); toastUndo = undo || null;
+  t.innerHTML = "<span>" + esc(msg) + "</span>" + (undo ? "<button class=\"tundo\" type=\"button\" data-do=\"undo\" data-fid=\"undo\">Undo</button>" : "");
+  t.classList.toggle("hasundo", !!undo);
+  placeToast(true);
   requestAnimationFrame(() => t.classList.add("on"));
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.classList.remove("on"); setTimeout(() => { try { if (!t.classList.contains("on") && t.matches(":popover-open")) t.hidePopover(); } catch (e) {} }, 250); }, 5000);
+  toastTimer = setTimeout(hideToast, undo ? 8000 : 5000);
+}
+function hideToast() {
+  const t = $("#toast"); toastUndo = null; t.classList.remove("on", "hasundo");
+  setTimeout(() => { try { if (!t.classList.contains("on") && t.matches(":popover-open")) t.hidePopover(); } catch (e) {} }, 250);
+}
+/** Puts the message where it can be tapped: in the open sheet, or on the page. again = show it (again) where it now is. */
+function placeToast(again) {
+  const t = $("#toast"), home = dlg.open ? dlg : $("#app"), was = t.classList.contains("on");
+  if (t.parentNode !== home) home.appendChild(t);           /* moving it closes it, so it opens again below */
+  if (!again && !was) return;
+  try { if (t.showPopover) { if (t.matches(":popover-open")) t.hidePopover(); t.showPopover(); } } catch (e) {}
 }
 /** A message about a save: inside the open sheet if it has room for one, otherwise as a toast. */
 function say(msg) { const slot = dlg.open && $("#err", dlg); if (slot) slot.textContent = msg; else toast(msg); }
@@ -448,6 +544,7 @@ const TAPS = {
   "menu-open": () => menu(true),
   "menu-close": () => menu(false),
   "close": () => hide(),
+  "undo": () => { const u = toastUndo; hideToast(); if (u) u(); },
   "refresh": () => { if (!S.data) { S.trouble = ""; go(S.tab); } load(true); }
 };
 document.addEventListener("click", e => {
@@ -510,7 +607,17 @@ function reloadSoon() {
 dlg.addEventListener("close", () => setTimeout(reloadSoon, 0));
 addEventListener("online", () => { if (typeof dzWaiting === "function" && S.data && dzWaiting().length) load(); });    /* back online: read the tracker afresh, which tries brief words that didn't save again (designs.js) */
 document.addEventListener("focusout", () => setTimeout(reloadSoon, 400));
-/* Phone: the pinned top bar gets its hairline once the page has scrolled under it (app.css). */
-const markScrolled = () => document.documentElement.classList.toggle("scrolled", scrollY > 0);
+/* Phone: the pinned top bar gets its hairline once the page has scrolled under it, and fades to about half while the page
+   scrolls down, so it hides less of it. Scrolling up a little, or reaching the top, brings it back (app.css). */
+let barFrom = 0;
+const markScrolled = () => {
+  const root = document.documentElement, y = Math.max(0, scrollY);
+  root.classList.toggle("scrolled", y > 0);
+  if (root.classList.contains("held")) return;                            /* a sheet is open: the page isn't really moving */
+  if (y <= 0) { root.classList.remove("dimbar"); barFrom = 0; return; }
+  if (y > barFrom + 12 && y > 60) { root.classList.add("dimbar"); barFrom = y; }
+  else if (y < barFrom - 24) { root.classList.remove("dimbar"); barFrom = y; }
+  else if (root.classList.contains("dimbar") ? y > barFrom : y < barFrom) barFrom = y;      /* keep measuring from the turn */
+};
 addEventListener("scroll", markScrolled, { passive: true }); markScrolled();
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkVersion(); });
