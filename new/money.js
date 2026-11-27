@@ -1,8 +1,10 @@
 "use strict";
-/* wmhb app: the Money screen. Income, expenses and profit; what is still to come; each client's payments; expenses; bonds.
-   Bonds are never income. A payment is a row on the tracker's Payments tab, and an expense is a row on its Expenses tab. */
+/* wmhb app: the Money screen, the business: income, expenses (logging and fixing them), profit, should be in the bank and
+   the bonds. Bonds are never income. A payment is a row on the tracker's Payments tab, and an expense a row on its Expenses
+   tab; a removed row stays there, marked with the day it was removed, and counts for nothing. A client card opens the
+   client sheet (client.js), where every change for a client is made. */
 
-{ const t = todayIso(); Object.assign(S, { period: "all", py: +t.slice(0, 4), pm: [+t.slice(0, 4), +t.slice(5, 7) - 1], mopen: { coming: null, done: false }, xopen: false }); }
+{ const t = todayIso(); Object.assign(S, { period: "all", py: +t.slice(0, 4), pm: [+t.slice(0, 4), +t.slice(5, 7) - 1], mopen: { coming: null, done: false }, xopen: false, xask: 0 }); }
 /* The expense types come from the tracker's Settings tab. These are only used if it sends none. */
 const EXPENSE_TYPES = ["Equipment", "Running costs", "Marketing", "Software", "Contractor"];
 const expenseTypes = () => { const fromTracker = (S.data.lists || {})["Expense type"]; return fromTracker && fromTracker.length ? fromTracker : EXPENSE_TYPES; };
@@ -16,7 +18,7 @@ const periodName = () => S.period === "year" ? String(S.py) : MONTHS[S.pm[1]] + 
 
 /* ---------- the sums ---------- */
 function moneySums() {
-  const pays = S.data.payments || [], costs = S.data.expenses || [], hire = pays.filter(p => p.what === "Hire");
+  const pays = kept(S.data.payments), costs = kept(S.data.expenses), hire = pays.filter(p => p.what === "Hire");
   const books = (S.data.bookings || []).filter(live).map(b => ({ b, f: moneyOf(b) }));
   const all = { income: sum(hire), spent: sum(costs), held: sum(pays.filter(p => p.what === "Bond in")) - sum(pays.filter(p => p.what === "Bond back")), expected: books.reduce((s, x) => s + x.f.owing, 0) };
   all.bank = all.income - all.spent + all.held;
@@ -99,14 +101,22 @@ function drawMoneyClients(M, grow) {
 
 /* ---------- expenses ---------- */
 function drawCosts() {
-  const costs = (S.data.expenses || []).filter(x => inPeriod(x.date)), n = costs.length;
+  const listed_ = (S.data.expenses || []).filter(x => inPeriod(x.date)), costs = kept(listed_), n = listed_.length;
   const listed = expenseTypes(), types = listed.concat(costs.map(x => txt(x.type)).filter((t, i, a) => t && !listed.includes(t) && a.indexOf(t) === i));
-  const newest = costs.slice().sort((a, b) => (a.date || "") < (b.date || "") ? 1 : (a.date || "") > (b.date || "") ? -1 : b.row - a.row);
+  const newest = listed_.slice().sort((a, b) => (a.date || "") < (b.date || "") ? 1 : (a.date || "") > (b.date || "") ? -1 : b.row - a.row);
   $("#m-costs").innerHTML = "<div class=\"xhead\"><h3>Expenses</h3><button class=\"cardbtn wm-card\" type=\"button\" data-do=\"cost-new\" data-fid=\"cost-new\" aria-haspopup=\"dialog\">Add an expense</button></div><div class=\"xrows\">" +
     types.map(t => { const of = costs.filter(x => txt(x.type) === t); return "<div class=\"xrow\"><span class=\"n\">" + esc(t) + "</span><span class=\"c\">" + of.length + " item" + (of.length === 1 ? "" : "s") + "</span><span class=\"v\">" + money(sum(of)) + "</span></div>"; }).join("") +
     (n ? "<button class=\"linkbtn xall\" type=\"button\" data-do=\"cost-all\" data-fid=\"cost-all\" aria-expanded=\"" + S.xopen + "\">" + (S.xopen ? "Hide the list" : "Show all " + n) + "</button>" +
-      "<div class=\"coll" + (S.xopen ? " open" : "") + "\" id=\"x-all\"><div><div>" + newest.map(x =>
-        "<div class=\"xitem\"><span class=\"d\">" + (x.date ? fmt(x.date) : "") + "</span><span class=\"w\"><span>" + esc(x.what) + "</span><span>" + esc(txt(x.type) + (txt(x.invoice) ? ", for " + x.invoice : "")) + "</span></span><span class=\"v\">" + money(num(x.amount)) + "</span></div>").join("") + "</div></div></div>" : "") + "</div>";
+      "<div class=\"coll" + (S.xopen ? " open" : "") + "\" id=\"x-all\"><div><div>" + newest.map(costRow).join("") + "</div></div></div>" : "") + "</div>";
+}
+
+/** One expense in the full list, with Remove (it asks first). A removed one stays, greyed, with the day it was removed. */
+function costRow(x) {
+  const words = x.what + ", " + money(num(x.amount)) + (x.date ? ", " + dParts(x.date).d + " " + dParts(x.date).mo : "");
+  if (S.xask === x.row) return "<div class=\"xitem ask\"><span class=\"hq\">Remove " + esc(words) + "?</span><span class=\"ha\"><button class=\"cardbtn wm-card hyes\" type=\"button\" data-do=\"x-yes\" data-row=\"" + x.row + "\" data-fid=\"xy-" + x.row + "\">Remove</button><button class=\"linkbtn\" type=\"button\" data-do=\"x-no\" data-fid=\"xn-" + x.row + "\">Keep</button></span></div>";
+  return "<div class=\"xitem" + (x.removed ? " gone" : "") + "\"><span class=\"d\">" + (x.date ? fmt(x.date) : "") + "</span><span class=\"w\"><span>" + esc(x.what) + "</span><span>" + esc(txt(x.type) + (txt(x.invoice) ? ", for " + x.invoice : "")) + "</span>" +
+    (x.removed ? "<span class=\"hgone\">Removed " + dParts(x.removed).d + " " + dParts(x.removed).mo + "</span>" : "") + "</span><span class=\"v\">" + money(num(x.amount)) + "</span>" +
+    (x.removed ? "" : x.row > 0 ? "<button class=\"linkbtn hx\" type=\"button\" data-do=\"x-remove\" data-row=\"" + x.row + "\" data-fid=\"xx-" + x.row + "\" aria-label=\"Remove " + esc(words) + "\">Remove</button>" : "") + "</div>";
 }
 
 /* ---------- bonds, held apart ---------- */
@@ -119,53 +129,6 @@ function drawBonds(M) {
   const list = M.books.filter(x => x.f.bond !== "none").sort(byDate);
   $("#m-bonds").innerHTML = "<div class=\"bhead\"><h3>Bonds, held apart</h3><p>Not your money, so never counted as income. Holding " + money(M.all.held) + " now.</p></div><div class=\"brows\">" +
     list.map(x => { const st = bondState(x.f); return "<button class=\"brow\" type=\"button\" data-do=\"client\" data-row=\"" + x.b.row + "\" data-fid=\"br-" + x.b.row + "\" aria-haspopup=\"dialog\"><i class=\"" + st[0] + "\" aria-hidden=\"true\"></i><span class=\"t\"><span>" + esc(x.b.client) + "</span><span class=\"" + st[0] + "\">" + esc(st[1]) + "</span></span><span class=\"inv\">" + esc(x.b.invoice) + "</span></button>"; }).join("") + "</div>";
-}
-
-/* ---------- the client sheet: payments so far, record a payment, the bond ---------- */
-let payFor = 0, withBond = false;      /* the booking the sheet is showing, and whether "includes the bond" is ticked */
-const bookingAt = row => (S.data.bookings || []).find(b => b.row === row);
-function openClient(row, keep) {
-  const b = bookingAt(row); if (!b) { hide(); return; }
-  if (payFor !== row) withBond = false;
-  payFor = row;
-  const f = moneyOf(b), hire = (S.payBy[b.invoice] || []).filter(p => p.what === "Hire"), bond = f.bondAmount, canBond = f.bond === "due" && bond > 0;
-  if (!canBond) withBond = false;
-  const typed = keep && $("#other") ? $("#other").value : "", said_ = keep && $("#err") ? $("#err").textContent : "";
-  const st = bondState(f);
-  show("client", "<h2 id=\"dlg-title\" tabindex=\"-1\" class=\"tight\">" + esc(b.client) + "</h2><p class=\"sub\">" + esc([b.invoice, txt(b.type), dayOf(f.date)].filter(Boolean).join(", ")) + "</p>" +
-    "<div class=\"tot\"><div><div>Total</div><div>" + money(f.total) + "</div></div><div><div>Received</div><div>" + money(f.received) + "</div></div><div><div>To pay</div><div>" + money(f.owing) + "</div></div></div>" +
-    "<h3 class=\"sh first\">Payments so far</h3>" + (hire.length ? hire.map(p => "<div class=\"prow\"><span>" + (p.date ? fmt(p.date) : "") + "</span><span>" + money(num(p.amount)) + "</span></div>").join("") : "<p class=\"none\">None yet.</p>") +
-    (f.owing > 0 ? "<h3 class=\"sh\">Record a payment</h3>" +
-      (canBond ? "<button class=\"tickf\" type=\"button\" data-do=\"pay-bond\" data-fid=\"pay-bond\" aria-pressed=\"" + withBond + "\"><span class=\"box\" aria-hidden=\"true\">" + CHECK + "</span>This payment includes the " + money(bond) + " bond</button>" : "") +
-      "<button class=\"paybtn wm-card\" type=\"button\" data-do=\"pay-rest\" data-fid=\"pay-rest\"><span>Rest of the fee received</span><span>" + money(f.owing) + "</span></button>" +
-      "<div class=\"other\"><div class=\"fld\"><label for=\"other\">Another amount ($)</label><input class=\"inp wm-card\" id=\"other\" type=\"number\" inputmode=\"decimal\" min=\"0\" step=\"any\" data-fid=\"other\" value=\"" + esc(typed) + "\"></div><button class=\"cardbtn wm-card\" type=\"button\" data-do=\"pay-other\" data-fid=\"pay-other\">Received</button></div>" : "") +
-    (f.bond !== "none" ? "<h3 class=\"sh\">Bond, held apart</h3><div class=\"bondbox wm-card\"><span>" + esc(st[1]) + ".</span>" +
-      (f.bond === "due" && bond > 0 ? "<button class=\"cardbtn wm-card\" type=\"button\" data-do=\"bond-in\" data-fid=\"bond-in\">Bond received</button>" : f.bond === "held" ? "<button class=\"cardbtn wm-card\" type=\"button\" data-do=\"bond-back\" data-fid=\"bond-back\">Bond given back</button>" : "") + "</div>" : "") +
-    "<p class=\"err\" id=\"err\" role=\"alert\">" + esc(said_) + "</p><button class=\"btn big done\" type=\"button\" data-do=\"close\">Done</button>");
-  dlg.setAttribute("aria-label", "Payments");
-}
-SHEETS.client = { sync() { keepFocus(() => openClient(payFor, true)); } };
-
-/** Records payments for one booking. They show straight away, then save as rows on the Payments tab, dated today. */
-async function pay(b, items, done) {
-  const hire = sum(items.filter(p => p.what === "Hire")), slot = $("#err"); if (slot) slot.textContent = "";
-  const res = await save("addPayment", { invoice: b.invoice, payments: items }, data => {
-    const mine = data.bookings.find(x => x.row === b.row), today = todayIso();
-    items.forEach((p, i) => data.payments.push({ row: -(Date.now() + i), date: today, invoice: b.invoice, client: b.client, amount: p.amount, what: p.what, note: "" }));
-    mine.received = num(mine.received) + hire; mine.owing = Math.max(0, num(mine.owing) - hire);
-    if (hire > 0 && txt(mine.status) === "Waiting on deposit" && mine.received >= num(S.T.smallestDeposit)) mine.status = "Booked";   /* the tracker marks it Booked once the deposit is in */
-    if (items.some(p => p.what === "Bond in")) mine.bond = "Held";
-    if (items.some(p => p.what === "Bond back")) mine.bond = "Returned";
-    data.reports = null;                 /* the tracker's own totals are out of date until it answers */
-  });
-  if (res) toast(done);
-}
-function payHire(amount) {
-  const b = bookingAt(payFor); if (!b) return;
-  const f = moneyOf(b), items = [{ what: "Hire", amount }], bond = withBond && f.bond === "due" ? f.bondAmount : 0;
-  if (bond) items.push({ what: "Bond in", amount: bond });
-  withBond = false;
-  pay(b, items, "Recorded " + money(amount) + " from " + b.client + (bond ? ", and the " + money(bond) + " bond." : "."));
 }
 
 /* ---------- add an expense ---------- */
@@ -193,10 +156,13 @@ dlg.addEventListener("submit", async e => {
   hide();
   const res = await save("addExpense", out, data => {
     const b = out.invoice ? data.bookings.find(x => x.invoice === out.invoice) : null;      /* "No client" has no invoice number: it belongs to no booking */
-    data.expenses.push({ row: -Date.now(), date: todayIso(), what, type: out.type, amount, invoice: out.invoice, client: b ? b.client : "", notes: "" });
+    data.expenses.push({ row: -Date.now(), date: todayIso(), what, type: out.type, amount, invoice: out.invoice, client: b ? b.client : "", notes: "", removed: "" });
     data.reports = null;
   });
-  if (res) toast("Saved: " + what + ", " + money(amount) + ".");
+  if (res) {
+    const entries = (res.rows || []).map(row => ({ tab: "Expenses", row, amount, invoice: out.invoice || "", what }));
+    toast("Saved: " + what + ", " + money(amount) + ".", entries.length ? () => removeEntries(entries, "Undone: " + what + " taken off.") : null);
+  }
   else if (!dlg.open) openCost(kept, $("#toast").textContent);
 });
 
@@ -214,19 +180,14 @@ Object.assign(TAPS, {
     if (open) $$(".bar", box).forEach(bar => { bar.classList.remove("wm-bar"); void bar.offsetWidth; bar.classList.add("wm-bar"); });   /* the paid bars grow as the section opens */
   },
   "cost-all": el => { S.xopen = !S.xopen; el.setAttribute("aria-expanded", S.xopen); el.textContent = S.xopen ? "Hide the list" : "Show all " + $$("#x-all .xitem").length; $("#x-all").classList.toggle("open", S.xopen); },
-  "client": el => openClient(+el.dataset.row),
-  "pay-bond": el => { withBond = !withBond; el.setAttribute("aria-pressed", withBond); },
-  "pay-rest": () => { const b = bookingAt(payFor); if (b) payHire(moneyOf(b).owing); },
-  "pay-other": () => {
-    const b = bookingAt(payFor), amount = Math.round(num($("#other").value) * 100) / 100; if (!b) return;
-    const owing = moneyOf(b).owing;
-    if (!(amount > 0)) { $("#err").textContent = "Type the amount that came in."; return; }
-    if (amount > owing) { $("#err").textContent = "That’s more than the " + money(owing) + " still to pay."; return; }
-    $("#other").value = ""; payHire(amount);
-  },
-  "bond-in": () => { const b = bookingAt(payFor); if (b) pay(b, [{ what: "Bond in", amount: moneyOf(b).bondAmount }], "Bond received from " + b.client + "."); },
-  "bond-back": () => { const b = bookingAt(payFor); if (b) pay(b, [{ what: "Bond back", amount: moneyOf(b).bondHeld }], "Bond given back to " + b.client + "."); },
   "cost-new": () => openCost(),
+  "x-remove": el => { S.xask = +el.dataset.row; drawCosts(); const yes = $("[data-do=x-yes]"); if (yes) yes.focus(); },
+  "x-no": () => { const row = S.xask; S.xask = 0; drawCosts(); const back = $("[data-fid=\"xx-" + row + "\"]"); if (back) back.focus(); },
+  "x-yes": el => {
+    const x = (S.data.expenses || []).find(r => r.row === +el.dataset.row); S.xask = 0; if (!x) return;
+    const entry = { tab: "Expenses", row: x.row, amount: x.amount, invoice: x.invoice || "", what: x.what }, words = x.what + ", " + money(num(x.amount));
+    removeEntries([entry], "Removed: " + words + ".", false, () => removeEntries([entry], "Put back: " + words + ".", true));
+  },
   "cost-pick": el => {
     const group = el.dataset.group, value = el.dataset.value;
     cost[group] = value;

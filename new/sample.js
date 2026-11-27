@@ -12,30 +12,30 @@ function demoServer(fn, arg) {
     const day = { hours: "3", powerPoint: "Yes", setupTime: "", startTime: "", runningIt: "", venueConfirmed: "", powerSorted: "", feePaid: "", bondPaid: "", designApproved: "", startSet: "", packed: "", packedItems: "", notes: "" };
     const design = { customBoard: "", board: "", screen: "", canva: "", stickerPrinted: "", names: "", line2: "", defaultWording: "", thanksWording: "", colours: "", notes: "", photos: "", madeOn: "" };
     const bk = (row, inv, client, date, type, venue, pkg, price, more) => Object.assign({
-      row, id: ref("B", row - 4), invoice: ref("INV", inv), client, date, type, venue, suburb: "", region: "Auckland", pkg, customPrice: price, cancelled: "", notes: "",
+      row, id: ref("B", row - 4), invoice: ref("INV", inv), client, date, type, venue, suburb: "", region: "Auckland", pkg, customPrice: price, cancelled: "", notes: "", statusByHand: "", gotInTouch: "", handle: "",
       phone: "", email: "", insta: "", source: "", referredBy: "", hostHours: 0, noPowerPoint: "", eventDay: Object.assign({}, day), videos: {}, designs: Object.assign({}, design)
     }, more || {});
     const on = (b, eventDay, designs) => { Object.assign(b.eventDay, eventDay || {}); Object.assign(b.designs, designs || {}); return b; };
-    const eq = (row, name, contact, type, date, message, status, what, bookingId) => ({ row, received: at(-row), name, contact, type, date, message, status, what: what || "", bookingId: bookingId || "" });
-    const pay = (days, inv, amount, what) => ({ date: at(days), invoice: ref("INV", inv), amount, what, note: "" });
-    const cost = (days, what, type, amount, inv) => ({ date: at(days), what, type, amount, invoice: inv ? ref("INV", inv) : "", notes: "" });
+    const eq = (row, name, contact, type, date, message, status, what, bookingId, gotInTouch, handle) => ({ row, received: at(-row), name, contact, type, date, message, status, what: what || "", bookingId: bookingId || "", gotInTouch: gotInTouch || "", handle: handle || "" });
+    const pay = (days, inv, amount, what) => ({ date: at(days), invoice: ref("INV", inv), amount, what, note: "", removed: "" });
+    const cost = (days, what, type, amount, inv) => ({ date: at(days), what, type, amount, invoice: inv ? ref("INV", inv) : "", notes: "", removed: "" });
     demoDb = {
       bookings: [
         bk(5, 1, "City Expo", at(-25), "Expo / show", "Showgrounds", "Market hire", 250),
         bk(6, 2, "Olivia", at(-10), "Birthday", "Golf Resort", "Celebration hire", 910),
-        on(bk(7, 3, "Charlotte", at(17), "Birthday", "City Hotel", "Celebration hire", 1150, { email: "charlotte@example.com" }), { venueConfirmed: "Yes" }, { names: "Charlotte's 30th" }),
-        on(bk(8, 4, "Tane Rewi", at(11), "Birthday", "Community Hall", "Celebration hire", 910, { phone: "021 555 0101", suburb: "Henderson" }), { hours: "4", setupTime: "2:00 PM", runningIt: "Sara", venueConfirmed: "Yes", feePaid: "Yes", bondPaid: "Yes", designApproved: "Yes" }, { screen: "Style 4: Arch", board: "Style 1: Classic" }),
-        on(bk(9, 5, "Ruby Carter", at(24), "Wedding", "Valley Estate", "Forever", 1270, { hostHours: 2, insta: "@sample.ruby" }), { hours: "6", setupTime: "2:30 PM", startTime: "4:00 PM", runningIt: "Aadil and Sara", venueConfirmed: "Yes", powerSorted: "Yes", feePaid: "Yes", startSet: "Yes" },
+        on(bk(7, 3, "Charlotte", at(17), "Birthday", "City Hotel", "Celebration hire", 1150, { email: "charlotte@example.com", gotInTouch: "Email" }), { venueConfirmed: "Yes" }, { names: "Charlotte's 30th" }),
+        on(bk(8, 4, "Tane Rewi", at(11), "Birthday", "Community Hall", "Celebration hire", 910, { phone: "021 555 0101", suburb: "Henderson", gotInTouch: "Text or call", handle: "021 555 0101" }), { hours: "4", setupTime: "2:00 PM", runningIt: "Sara", venueConfirmed: "Yes", feePaid: "Yes", bondPaid: "Yes", designApproved: "Yes" }, { screen: "Style 4: Arch", board: "Style 1: Classic" }),
+        on(bk(9, 5, "Ruby Carter", at(24), "Wedding", "Valley Estate", "Forever", 1270, { hostHours: 2, insta: "@sample.ruby", gotInTouch: "Instagram", handle: "@sample.ruby" }), { hours: "6", setupTime: "2:30 PM", startTime: "4:00 PM", runningIt: "Aadil and Sara", venueConfirmed: "Yes", powerSorted: "Yes", feePaid: "Yes", startSet: "Yes" },
           { names: "Ruby & James", line2: long(at(24)), defaultWording: "Leave us a video message", thanksWording: "Thank you for your message", colours: "Sage, Cream, Gold", notes: "Garden wedding, soft and elegant. Loves the arch at the venue. No pink.", photos: "sample", madeOn: at(-2) }),
-        on(bk(10, 6, "Hannah Reid", at(108), "Wedding", "Waikato", "Forever", 1305, { region: "Hamilton", phone: "021 555 0123" }), { hours: "6" }),
-        on(bk(11, 7, "Mele", at(150), "Engagement party", "", "Celebration hire", 990, { noPowerPoint: "Yes", email: "mele@example.com" })),
-        on(bk(12, 8, "Glow Studio (Mia)", at(9), "Brand / corporate", "To confirm, likely their studio", "Corporate hire", 910, { phone: "09 555 0100" }), { runningIt: "Aadil" }),
+        on(bk(10, 6, "Hannah Reid", at(108), "Wedding", "Waikato", "Forever", 1305, { region: "Hamilton", phone: "021 555 0123", gotInTouch: "Text or call", handle: "021 555 0123" }), { hours: "6" }),
+        on(bk(11, 7, "Mele", at(150), "Engagement party", "", "Celebration hire", 990, { noPowerPoint: "Yes", email: "mele@example.com", gotInTouch: "TikTok", handle: "@sample.mele" })),
+        on(bk(12, 8, "Glow Studio (Mia)", at(9), "Brand / corporate", "To confirm, likely their studio", "Corporate hire", 910, { phone: "09 555 0100", gotInTouch: "Messenger", handle: "sample.glowstudio" }), { runningIt: "Aadil" }),
         bk(13, 9, "Kiri", at(20), "Birthday", "", "Celebration hire", 450, { cancelled: "Yes" })
       ],
       enquiries: [
         eq(2, "Rangi", "Instagram @sample.rangi", "Wedding", "", "", "Cancelled", "Cancelled"),
         eq(3, "Tane", "Phone 021 555 0142", "Birthday", MONTHS[far.m] + " " + far.y, "Venue: Henderson", "New"),
-        eq(4, "Daniel Marsh", "Phone 022 555 0177", "Birthday", long(at(4)), "Venue: Rooftop Bar", "New"),
+        eq(4, "Daniel Marsh", "Phone 022 555 0177", "Birthday", long(at(4)), "Venue: Rooftop Bar", "New", "", "", "Website form"),
         eq(5, "Lani Tuala", "Phone 021 555 0190", "Wedding", long(at(10)), "Venue: Garden Venue", "Waiting on response"),
         eq(6, "Jess", "Instagram, example only", "Birthday", long(at(17)), "", "New"),
         eq(7, "Hannah Reid", "Phone 021 555 0123", "Wedding", long(at(108)), "Venue: Waikato", "Waiting on deposit", "Moved to bookings", "B-0006")
@@ -54,7 +54,8 @@ function demoServer(fn, arg) {
       lists: {
         "Event type": ["Wedding", "Engagement party", "Birthday", "Anniversary", "Baby shower", "Other celebration", "Brand / corporate", "Expo / show", "Market / fair"],
         "Region": ["Auckland", "Hamilton", "Waikato (other)"], "How they found us": ["Instagram", "Referral", "Repeat client"], "Yes": ["Yes"],
-        "Expense type": ["Equipment", "Running costs", "Marketing", "Software", "Contractor"], "Payment type": ["Hire", "Bond in", "Bond back"]
+        "Expense type": ["Equipment", "Running costs", "Marketing", "Software", "Contractor"], "Payment type": ["Hire", "Bond in", "Bond back"],
+        "Got in touch by": ["Instagram", "Messenger", "WhatsApp", "TikTok", "Text or call", "Email", "Website form"]
       },
       /* name, who it is for, price, hours, takes a bond, days before the event the balance is due, deposit */
       packs: [["Classic", "Weddings", 550, 3, "Yes", 28, "30% of the total"], ["Forever", "Weddings", 795, 6, "Yes", 28, "30% of the total"],
@@ -76,29 +77,70 @@ function demoServer(fn, arg) {
     });
   }
   const PACKING = ["Top board", "Bottom board", "Base", "Laptop and charger", "Camera", "Monitor", "Light", "Vintage phone", "Speaker", "Cable box", "10 m extension cord", "Table message cards"];
-  const db = demoDb, of = (rows, inv, what) => rows.filter(p => p.invoice === inv && (!what || p.what === what)).reduce((s, p) => s + p.amount, 0);
+  const db = demoDb, of = (rows, inv, what) => rows.filter(p => !p.removed && p.invoice === inv && (!what || p.what === what)).reduce((s, p) => s + p.amount, 0);
   const next = list => Math.max(0, ...list) + 1;
+  function formulaStatus(b) {
+    const least_ = Number(db.terms[1][1].replace(/[^\d.]/g, "")), received_ = of(db.payments, b.invoice, "Hire");
+    return b.cancelled === "Yes" ? "Cancelled" : b.statusByHand ? b.statusByHand : !b.date ? "Date needed" : received_ < least_ ? "Waiting on deposit" : b.date < t ? "Completed" : "Booked";
+  }
 
   /* ---------- the calls ---------- */
-  let id = "", invoice = "", row = 0;
-  const blank = { phone: "", email: "", insta: "", source: "", referredBy: "", suburb: "", region: "", pkg: "", customPrice: 0, cancelled: "", notes: "", hostHours: 0, noPowerPoint: "", eventDay: { hours: "3" }, videos: {}, designs: {} };
+  let id = "", invoice = "", row = 0, more = {};
+  const SOURCES = db.lists["Got in touch by"];
+  const enquirySource = q => { if (q.gotInTouch) return { source: q.gotInTouch, handle: q.handle };
+    const insta = /^instagram\s+(@\S+)/i.exec(q.contact), phone = /^phone\s+([\d\s()+-]{7,})$/i.exec(q.contact);
+    return insta ? { source: "Instagram", handle: insta[1] } : phone ? { source: "Text or call", handle: phone[1].trim() } : { source: "", handle: "" }; };
+  const blank = { phone: "", email: "", insta: "", source: "", referredBy: "", suburb: "", region: "", pkg: "", customPrice: 0, cancelled: "", notes: "", statusByHand: "", gotInTouch: "", handle: "", hostHours: 0, noPowerPoint: "", eventDay: { hours: "3" }, videos: {}, designs: {} };
   const book = fields => { row = next(db.bookings.map(b => b.row)); id = ref("B", row - 4); invoice = ref("INV", next(db.bookings.map(b => +b.invoice.slice(4)))); db.bookings.push(Object.assign({}, blank, { row, id, invoice, eventDay: { hours: "3" }, videos: {}, designs: {} }, fields)); };
   if (fn === "setEnquiryStatus") {
     const q = db.enquiries.find(x => x.row === arg.row && x.name === arg.name); if (!q) throw told("That enquiry is no longer there. Press Refresh.");
     if (q.what === "Moved to bookings" || q.bookingId) throw told("This enquiry is already booking " + (q.bookingId || "on the Clients tab") + ". Change it on the Clients tab.");
     q.status = arg.status; q.what = arg.status === "Cancelled" ? "Cancelled" : ""; q.bookingId = "";
     if (arg.status === "Waiting on deposit") {
-      book({ client: q.name, date: arg.eventDate || parseLoose(q.date) || "", phone: (/^Phone\s+(.+)/.exec(q.contact) || [])[1] || "", insta: (/^Instagram\s+(.+)/.exec(q.contact) || [])[1] || "", type: q.type, venue: ((/venue:\s*([^\n]+)/i.exec(q.message) || [])[1] || "").trim() });
+      const from = enquirySource(q);
+      book({ client: q.name, date: arg.eventDate || parseLoose(q.date) || "", phone: (/^Phone\s+(.+)/.exec(q.contact) || [])[1] || "", insta: (/^Instagram\s+(.+)/.exec(q.contact) || [])[1] || "", type: q.type, venue: ((/venue:\s*([^\n]+)/i.exec(q.message) || [])[1] || "").trim(), gotInTouch: from.source, handle: from.handle });
       q.what = "Moved to bookings"; q.bookingId = id;
     }
   } else if (fn === "addBooking") {
-    if (arg["Custom price"] && !/^custom$/i.test(arg["Package"] || "")) throw told("A custom price is only for the Custom package.");
-    book({ client: arg["Client name"], date: arg["Event date"], phone: arg["Phone"] || "", email: arg["Email"] || "", insta: arg["Instagram"] || "", source: arg["How they found us"] || "", type: arg["Event type"] || "", venue: arg["Venue"] || "", suburb: arg["Suburb"] || "", region: arg["Region"] || "", pkg: arg["Package"], customPrice: num(arg["Custom price"]) });
+    const f = arg.fields || arg, q = arg.fields && arg.enquiry ? db.enquiries.find(x => x.row === arg.enquiry.row && x.name === arg.enquiry.name) : null;
+    if (arg.fields && arg.enquiry && !q) throw told("The enquiries have moved. Press Refresh and try again.");
+    if (q && (q.what === "Moved to bookings" || q.bookingId)) throw told("This enquiry is already booking " + (q.bookingId || "on the Clients tab") + ".");
+    if (f["Custom price"] && !/^custom$/i.test(f["Package"] || "")) throw told("A custom price is only for the Custom package.");
+    const from = q ? enquirySource(q) : { source: "", handle: "" };
+    book({ client: f["Client name"], date: f["Event date"], phone: f["Phone"] || "", email: f["Email"] || "", insta: f["Instagram"] || "", source: f["How they found us"] || "", type: f["Event type"] || "", venue: f["Venue"] || "", suburb: f["Suburb"] || "", region: f["Region"] || "", pkg: f["Package"], customPrice: num(f["Custom price"]), notes: f["Notes"] || "",
+      gotInTouch: f["Got in touch by"] || from.source, handle: f["Handle or number"] || from.handle });
+    if (q) { q.status = "Waiting on deposit"; q.what = "Moved to bookings"; q.bookingId = id; }
   } else if (fn === "addPayment") {
     if (!db.bookings.some(b => b.invoice === arg.invoice)) throw told("No booking has the invoice number " + arg.invoice + ". Press Refresh and try again.");
-    arg.payments.forEach(p => db.payments.push({ date: t, invoice: arg.invoice, amount: num(p.amount), what: p.what, note: p.note || "" }));
+    arg.payments.forEach(p => db.payments.push({ date: t, invoice: arg.invoice, amount: num(p.amount), what: p.what, note: p.note || "", removed: "" }));
+    more = { rows: arg.payments.map((p, i) => 5 + db.payments.length - arg.payments.length + i) };
   } else if (fn === "addExpense") {
-    db.expenses.push({ date: t, what: arg.what, type: arg.type, amount: num(arg.amount), invoice: arg.invoice || "", notes: arg.notes || "" });
+    db.expenses.push({ date: t, what: arg.what, type: arg.type, amount: num(arg.amount), invoice: arg.invoice || "", notes: arg.notes || "", removed: "" });
+    more = { rows: [5 + db.expenses.length - 1] };
+  } else if (fn === "removeEntries") {
+    const found = (arg.entries || []).map(e => {
+      const list = e.tab === "Payments" ? db.payments : e.tab === "Expenses" ? db.expenses : null; if (!list) throw told("Only payments and expenses can be removed.");
+      const x = list[e.row - 5];
+      if (!x || Math.abs(x.amount - num(e.amount)) > 0.004 || (x.invoice || "") !== (e.invoice || "") || x.what !== e.what) throw told("The " + e.tab + " tab has changed since the app read it. Press Refresh and try again.");
+      return x;
+    });
+    found.forEach(x => { x.removed = arg.restore ? "" : t; });
+  } else if (fn === "setBookingStatus") {
+    const b = db.bookings.find(x => x.row === arg.row && x.id === arg.id); if (!b) throw told("The bookings have moved. Press Refresh and try again.");
+    more = { before: { byHand: b.statusByHand || "", cancelled: b.cancelled || "" } };
+    if (arg.restore) { b.statusByHand = arg.restore.byHand || ""; b.cancelled = arg.restore.cancelled || ""; }
+    else {
+      if (!["Waiting on deposit", "Booked", "Completed", "Cancelled"].includes(arg.status)) throw told("\"" + arg.status + "\" is not a booking status.");
+      if (arg.status === "Cancelled") { b.statusByHand = ""; b.cancelled = "Yes"; }
+      else { b.statusByHand = ""; b.cancelled = ""; if (formulaStatus(b) !== arg.status) b.statusByHand = arg.status; }
+    }
+    more.status = formulaStatus(b);
+  } else if (fn === "setContact") {
+    if (arg.source && !SOURCES.includes(arg.source)) throw told("\"" + arg.source + "\" is not an option for Got in touch by on the Settings tab.");
+    const x = arg.kind === "enquiry" ? db.enquiries.find(q => q.row === arg.row && q.name === arg.name) : db.bookings.find(b => b.row === arg.row && b.id === arg.id);
+    if (!x) throw told(arg.kind === "enquiry" ? "The enquiries have moved. Press Refresh and try again." : "The bookings have moved. Press Refresh and try again.");
+    x.gotInTouch = arg.source || ""; x.handle = String(arg.handle || "").trim();
+    return new Promise(done => setTimeout(() => done({ saved: true }), 350));
   } else if (fn === "saveBrief" || fn === "setDesignPick" || fn === "addBriefPhoto" || fn === "getBriefPhotos") {
     const b = db.bookings.find(x => x.row === arg.row && x.id === arg.id); if (!b) throw told("The bookings have moved. Press Refresh and try again.");
     const later = (value, ms) => new Promise(done => setTimeout(() => done(value), ms || 350));
@@ -116,20 +158,21 @@ function demoServer(fn, arg) {
     /* a sheet shows a saved time its own way, in capitals */
     const shown = v => { if (!v) return ""; const p = v.split(":").map(Number); return (p[0] % 12 || 12) + ":" + String(p[1]).padStart(2, "0") + (p[0] < 12 ? " AM" : " PM"); };
     if (fn === "setPacking") { const items = PACKING.filter(i => arg.items.includes(i)); b.eventDay.packedItems = items.join(", "); b.eventDay.packed = items.length === PACKING.length ? "Yes" : ""; }
-    else if (arg.field === "Sticker printed") b.designs.stickerPrinted = arg.value;
+    else if (arg.field === "Sticker printed") { if (arg.value !== "" && arg.value !== "Yes" && !/^\d{4}-\d{2}-\d{2}$/.test(arg.value)) throw told("Sticker printed can only be the day it was ticked, Yes or empty."); b.designs.stickerPrinted = arg.value; }
     else { const NAMES = { "Setup time": "setupTime", "Start time": "startTime", "Who is running it": "runningIt", "Venue confirmed": "venueConfirmed", "Power sorted": "powerSorted", "Fee paid in full": "feePaid", "Bond paid": "bondPaid", "Board design approved": "designApproved", "Start time set": "startSet" }, name = Object.prototype.hasOwnProperty.call(NAMES, arg.field) ? NAMES[arg.field] : "";     /* own names only, as has_() in Code.gs */
       if (!name) throw told("\"" + arg.field + "\" is not a column this app may change.");
       if (/time$/.test(arg.field) && arg.value !== "" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(arg.value)) throw told(arg.field + " needs a time.");      /* as checkValue_ in Code.gs: "HH:MM" only */
+      if (!/time$/.test(arg.field) && arg.field !== "Who is running it" && arg.value !== "" && arg.value !== "Yes" && !/^\d{4}-\d{2}-\d{2}$/.test(arg.value)) throw told(arg.field + " can only be the day it was ticked, Yes or empty.");
       b.eventDay[name] = /time$/.test(arg.field) ? shown(arg.value) : arg.value; }
     return new Promise(done => setTimeout(() => done({ saved: true }), 350));
   }
 
   /* ---------- what the tracker's formulas would work out ---------- */
+  /* Status: Cancelled, then "Status by hand", then from the money and the date (removed payments don't count) */
   const price = b => num(b.customPrice) || num((db.packs.find(p => p[0] === b.pkg) || [])[2]);
-  const least = Number(db.terms[1][1].replace(/[^\d.]/g, ""));          /* the smallest deposit that marks a booking Booked */
   const bookings = db.bookings.map(b => {
     const total = price(b), received = of(db.payments, b.invoice, "Hire"), cancelled = b.cancelled === "Yes";
-    const status = cancelled ? "Cancelled" : !b.date ? "Date needed" : received < least ? "Waiting on deposit" : b.date < t ? "Completed" : "Booked";
+    const status = formulaStatus(b);
     const owing = cancelled ? 0 : total - received;
     return Object.assign({}, b, {
       status, total, received, owing, nextStep: status === "Waiting on deposit" ? "Get deposit" : status === "Booked" && owing > 0 ? "Balance due" : "",
@@ -137,8 +180,9 @@ function demoServer(fn, arg) {
     });
   });
   const who = inv => inv ? (db.bookings.find(b => b.invoice === inv) || {}).client || "" : "";
-  const income = db.payments.filter(p => p.what === "Hire").reduce((s, p) => s + p.amount, 0), spent = db.expenses.reduce((s, x) => s + x.amount, 0);
-  const held = db.payments.reduce((s, p) => s + (p.what === "Bond in" ? p.amount : p.what === "Bond back" ? -p.amount : 0), 0);
+  const pays = db.payments.filter(p => !p.removed), costs = db.expenses.filter(x => !x.removed);
+  const income = pays.filter(p => p.what === "Hire").reduce((s, p) => s + p.amount, 0), spent = costs.reduce((s, x) => s + x.amount, 0);
+  const held = pays.reduce((s, p) => s + (p.what === "Bond in" ? p.amount : p.what === "Bond back" ? -p.amount : 0), 0);
   /* the Prices tab as it reads in tracker v3: packages with headings in row 5 (columns B to P), booking terms in rows 28 to 31 */
   const prices = Array.from({ length: 31 }, () => Array(16).fill(""));
   ["Package", "For", "Price", "Hours", "Bond?", "Extra hour price", "Highlight reel", "Custom board", "No power point needed", "Second event", "Host", "Extra hour", "Extra day", "Balance due (days before)", "Deposit"].forEach((h, i) => { prices[4][1 + i] = h; });
@@ -153,5 +197,5 @@ function demoServer(fn, arg) {
     lists: db.lists, packages: db.packs.map(p => ({ name: p[0], price: p[2] === "" ? null : p[2] })), prices, packing: PACKING, videosFolder: db.videosFolder || "", problems: []
   };
   /* the real back end takes a moment, and so does this one, so the screens can be checked the way they will really feel */
-  return new Promise(done => setTimeout(() => done({ id, row, invoice, data: copy(data) }), 350));
+  return new Promise(done => setTimeout(() => done(Object.assign({ id, row, invoice, data: copy(data) }, more)), 350));
 }

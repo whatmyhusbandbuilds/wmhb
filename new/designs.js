@@ -441,22 +441,30 @@ async function dzAddPhoto(row, file) {
   dzPhotosChanged(row);
 }
 
-/* ---------- the styles picked, on top of Event day ("Board design approved"), not designed: a plain sheet ---------- */
-function openDesignPeek(row) {
-  const b = eventAt(row); if (!b) return;
+/* ---------- the styles picked, on Event day's sheet for "Board design approved" (not designed: plain) ---------- */
+let pickedPic = { key: "", url: "" };          /* the last board picture drawn for it, kept while the sheet is drawn again */
+/** The screen style and board style picked for a booking, by name, with small pictures; or "No styles picked yet". */
+function pickedHtml(b) {
   const art = dzArtOf(b), si = pickOf(b, "screen"), bi = pickOf(b, "board");
   const part = (title, i, picture, none) => "<div><h3 class=\"sh first\">" + title + "</h3>" + (i >= 0 ? "<p class=\"pkname\">" + esc(styleTitle(i)) + "</p>" + picture : "<p class=\"none\">" + none + "</p>") + "</div>";
-  show("dzpeek", "<h2 id=\"dlg-title\" tabindex=\"-1\" class=\"tight\">" + esc(b.client) + "</h2><p class=\"sub\">" + eventLine({ b, f: moneyOf(b) }) + "</p>" +
-    (si < 0 && bi < 0 ? "<p class=\"none\">No styles picked yet.</p>"
-      : "<div class=\"dzpeek\">" + part("Screen style", si, si >= 0 ? screenHtml(art[si].screens.default, 150) : "", "No screen style picked yet.") +
-        part("Board style", bi, "<img class=\"pkboard\" alt=\"\" hidden>", "No board style picked yet.") + "</div>") +
-    "<button class=\"k k-dark wide mt16\" type=\"button\" data-do=\"dz-peek-open\" data-row=\"" + row + "\" data-fid=\"dz-peek-open\">Open in Designs</button>" +
-    "<button class=\"btn big done\" type=\"button\" data-do=\"close\">Done</button>");
-  if (bi < 0) return;
-  const photo = dzPhotoOf(b.row);
+  const key = [b.row, bi, pickOf(b, "screen"), (dzPhotoOf(b.row) || {}).url || ""].join("|"), ready = pickedPic.key === key && pickedPic.url;
+  return si < 0 && bi < 0 ? "<p class=\"none pknone\">No styles picked yet.</p>"
+    : "<div class=\"dzpeek\">" + part("Screen style", si, si >= 0 ? screenHtml(art[si].screens.default, 150) : "", "No screen style picked yet.") +
+      part("Board style", bi, "<img class=\"pkboard\" alt=\"\"" + (ready ? " src=\"" + pickedPic.url + "\"" : " hidden") + ">", "No board style picked yet.") + "</div>";
+}
+/** Draws the board picture into the sheet that pickedHtml() put up, if it is still showing. */
+function pickedPictures(b, kind) {
+  const bi = pickOf(b, "board"); if (bi < 0) return;
+  const key = [b.row, bi, pickOf(b, "screen"), (dzPhotoOf(b.row) || {}).url || ""].join("|");
+  if (pickedPic.key === key && pickedPic.url) return;
+  const art = dzArtOf(b), photo = dzPhotoOf(b.row);
   (photo ? asDataUrl(photo.blob).then(d => ({ [photo.url]: d })) : Promise.resolve({}))
     .then(swaps => boardPicture(art[bi], "front", boardScreen(b), 120 * PIC_SCALE(), 200 * PIC_SCALE(), swaps, false))
-    .then(url => { const img = sheetKind === "dzpeek" && $(".pkboard", dlg); if (img) { img.onload = () => URL.revokeObjectURL(url); img.src = url; img.hidden = false; } else URL.revokeObjectURL(url); })
+    .then(url => {
+      if (pickedPic.url) URL.revokeObjectURL(pickedPic.url);
+      pickedPic = { key, url };
+      const img = sheetKind === kind && $(".pkboard", dlg); if (img) { img.src = url; img.hidden = false; }
+    })
     .catch(() => {});
 }
 
@@ -521,7 +529,7 @@ Object.assign(TAPS, {
     S.dz.row = 0;
     if (back) {                                          /* came from Event day: back to the same card, at the same place */
       S.backTo = null; S.dz.page = "list"; dzWheelOff(); go(back.tab); scrollTo(0, back.y);
-      const from = $("[data-fid=\"eg-design-" + back.row + "\"]"); if (from) from.focus({ preventScroll: true });
+      const from = $("[data-fid=\"et-design-" + back.row + "\"]"); if (from) from.focus({ preventScroll: true });
       return;
     }
     dzGo("list", "back");

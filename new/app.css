@@ -102,10 +102,15 @@ h1,h2,h3,p{margin:0}
    own background (the dark base and the glow), so it looks the same until the page scrolls; then a hairline shows
    under it. It sits above the page and the wheels, below the side menu (41), its scrim (40), toasts (60) and sheets. */
 @media (max-width:999px){
-  .bar.ph{position:fixed;left:0;right:0;top:0;z-index:30;height:calc(64px + env(safe-area-inset-top));padding:calc(20px + env(safe-area-inset-top)) 20px 0;background:radial-gradient(120% 420px at 50% 0,rgba(241,194,45,.06),transparent 70%),#0E0E0F;transition:box-shadow 200ms ease}
-  .head{padding-top:calc(64px + env(safe-area-inset-top))}
+  .bar.ph{position:fixed;left:0;right:0;top:0;z-index:30;height:calc(76px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 20px 0;background:radial-gradient(120% 420px at 50% 0,rgba(241,194,45,.06),transparent 70%),#0E0E0F;transition:box-shadow 200ms ease,background-color 220ms ease,opacity 220ms ease}
+  .bar.ph>*{transition:opacity 220ms ease}
+  .head{padding-top:calc(76px + env(safe-area-inset-top))}
+  /* Taller from 27 Nov, with the buttons in the middle of it (they sat partly off it). Scrolling down, it fades to about half
+     and its background turns to frosted, see-through dark, so it hides less of the page; the buttons still work. */
+  .dimbar .bar.ph{background:rgba(14,14,15,.55);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2)}
+  .dimbar .bar.ph>*{opacity:.5}
   .scrolled .bar.ph{box-shadow:0 1px 0 var(--line)}
-  html{scroll-padding-top:calc(76px + env(safe-area-inset-top))}            /* a box brought into view lands below the bar, not under it */
+  html{scroll-padding-top:calc(88px + env(safe-area-inset-top))}            /* a box brought into view lands below the bar, not under it */
 }
 .mbtn{width:44px;height:44px;margin-left:-10px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:4px;background:transparent}
 .mbtn svg,.xbtn svg{fill:none;stroke:var(--text);stroke-width:2.2;stroke-linecap:round}
@@ -524,7 +529,7 @@ button.drow[data-what=start]::after{top:0;bottom:-7px}
 /* position:relative keeps a row's hidden screen-reader words inside its own card, so a closed card adds nothing to the page's height */
 .rrow{position:relative;width:100%;min-height:48px;display:flex;align-items:center;gap:12px;padding:6px 0;border:0;border-bottom:1.5px solid var(--line);background:transparent;color:var(--text);font-family:var(--font);text-align:left}
 .rrow .lab{flex:1;min-width:0;font-size:16px;font-weight:800}
-.rrow.on .lab{font-weight:600;color:var(--mute);text-decoration:line-through}
+.rrow.on .lab{font-weight:600;color:var(--mute)}          /* a ticked packing item; no line through the words (27 Nov) */
 .rrow .from{font-size:12px;font-weight:400;color:var(--mute);flex-shrink:0}
 .rrow.on .box{background:var(--text)}
 .ck{display:inline-flex}
@@ -730,7 +735,7 @@ h1.pcn{margin:16px 0 0;font-size:28px;letter-spacing:-.04em;line-height:1.05}
 .rbox .rsweep{position:absolute;left:0;top:0;right:0;bottom:0;border-radius:inherit;background:linear-gradient(180deg,#43A56E,#2B764A);-webkit-clip-path:circle(0% at 24px 50%);clip-path:circle(0% at 24px 50%);transition:clip-path 220ms cubic-bezier(.23,1,.32,1),-webkit-clip-path 220ms cubic-bezier(.23,1,.32,1);pointer-events:none}
 .rbox.on .rsweep{-webkit-clip-path:circle(150% at 24px 50%);clip-path:circle(150% at 24px 50%);transition-duration:480ms}
 .rbox>.box,.rbox>.lab,.rbox>.from,.rbox>button{position:relative}
-.rrows .rbox.on .lab{color:var(--text)}
+.rrows .rbox.on .lab{color:var(--text);font-weight:800}      /* a tick only turns the box green */
 .rrows .rbox .from{color:rgba(250,250,247,.8)}
 .rtick{flex-shrink:0;display:flex;align-items:center;justify-content:center;width:44px;height:44px;margin:-4px -10px;padding:0;border:0;background:transparent}
 .rgo{flex:1;min-width:0;min-height:44px;display:flex;align-items:center;gap:12px;padding:0;border:0;background:transparent;color:var(--text);font-family:var(--font);text-align:left}
@@ -840,3 +845,87 @@ h1.pcn{margin:16px 0 0;font-size:28px;letter-spacing:-.04em;line-height:1.05}
   .pill.waiting{border-color:transparent;color:#1C1B15;background:linear-gradient(180deg,#FFD978,#F6A623 55%,#E8900F);box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 1px 2px rgba(0,0,0,.6);text-shadow:none}
   .pill.enquiry{background:transparent;box-shadow:none;text-shadow:none}      /* an enquiry: a white dashed outline, no fill, as on the phone */
 }
+
+/* ======================================================================
+   The Clients hub (Aadil's workflow, 27 Nov): the client sheet, swiping a row, Undo, how they got in touch, why on Event day
+   ====================================================================== */
+@media (prefers-reduced-motion:reduce){.bar.ph,.bar.ph>*{transition:none!important}}
+
+/* the message at the bottom, with Undo */
+.toast.hasundo{display:flex;align-items:center;gap:14px;padding:6px 6px 6px 16px;pointer-events:auto}
+.toast .tundo{flex-shrink:0;min-height:44px;padding:0 16px;border:0;border-radius:10px;font:800 15px var(--font);color:#FAFAF7;text-shadow:0 -1px 0 rgba(0,0,0,.6);background:linear-gradient(180deg,#848890 0%,#62666D 36%,#51555B 62%,#45494F 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 -1px 0 rgba(0,0,0,.7),0 2px 0 #050505}
+
+/* how they got in touch: a small tag with the app's icon */
+.stag{display:inline-flex;align-items:center;gap:5px;min-height:22px;padding:1px 9px 1px 7px;border:1px solid rgba(250,250,247,.3);border-radius:999px;background:linear-gradient(180deg,#34373C,#212326);color:#FAFAF7;font:700 12px var(--font);white-space:nowrap;box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
+.stag .sico{flex-shrink:0;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sico .fill{fill:currentColor;stroke:none}
+button.stag{position:relative;min-height:30px;padding:3px 12px 3px 9px;font-size:13px}
+button.stag::after{content:"";position:absolute;left:-4px;right:-4px;top:-7px;bottom:-7px}          /* 44 px to tap */
+.stag.none{border-style:dashed;background:transparent;box-shadow:none;color:var(--text)}
+.cstag{margin:8px 0 2px}
+.csinv{font-weight:800;color:var(--text);white-space:nowrap}
+.srcs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+.srcchip{display:flex;align-items:center;gap:8px;width:100%;border-radius:12px;text-align:left}
+.srcchip .sico{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+
+/* the client sheet */
+.cskeys{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:4px;border-radius:10px}
+.cskeys .wm-seg{min-height:52px;padding:4px 4px;font-size:13px;line-height:1.15}
+.hrows{margin-top:2px}
+.hrow{display:flex;align-items:center;gap:10px;min-height:48px;padding:4px 0;border-bottom:1.5px solid var(--line);font-size:15px}
+.hrow .hd{width:52px;flex-shrink:0;font-size:13px;font-weight:700;color:var(--mute)}
+.hrow .hw{flex:1;min-width:0;font-weight:700}
+.hrow .hw small{display:block;font-size:12px;font-weight:500;color:var(--mute)}
+.hrow .hv{font-weight:800}
+.hrow .hx,.xitem .hx{min-height:44px;font-size:14px}
+.hgone{font-size:12px;font-weight:700;color:var(--mute);white-space:nowrap}
+.hrow.gone .hw,.hrow.gone .hv,.xitem.gone .w,.xitem.gone .v{color:var(--mute);font-weight:600}
+.hrow.ask,.xitem.ask{flex-wrap:wrap;padding:8px 0}
+.hq{flex:1 1 180px;min-width:0;font-weight:700;line-height:1.3}
+.ha{display:flex;align-items:center;gap:10px}
+.hyes{padding:0 14px;font-size:14px}
+.crows{display:flex;flex-direction:column}
+.crow{display:flex;align-items:center;gap:10px;min-height:52px;padding:4px 0;border-bottom:1.5px solid var(--line)}
+.crow .cl{width:76px;flex-shrink:0;font-size:13px;font-weight:700;color:var(--mute)}
+.crow .cv{flex:1;min-width:0;font-weight:700;overflow-wrap:anywhere}
+.crow .ca{display:flex;gap:6px;flex-shrink:0}
+.cbtn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:52px;padding:0 12px;border-radius:10px;font:800 14px var(--font);color:#FAFAF7;text-decoration:none;text-shadow:0 -1px 0 rgba(0,0,0,.6);background:linear-gradient(180deg,#848890 0%,#62666D 36%,#51555B 62%,#45494F 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 -1px 0 rgba(0,0,0,.7),0 2px 0 #050505}
+.cslinks{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+.cslinks .cardbtn{flex:1 1 auto;justify-content:center}
+.dnote.center{text-align:center}
+
+/* the day's list: each row opens that client */
+.dayrow{width:100%;min-height:56px;border:0;border-bottom:1.5px solid var(--line);background:transparent;color:var(--text);font-family:var(--font);text-align:left}
+.dayrow .dgo{flex-shrink:0;font-size:14px;font-weight:800;text-decoration:underline;text-underline-offset:3px}
+
+/* the Clients list on a phone: a row slides left over its quick buttons */
+.srow{position:relative;overflow:hidden}
+.srow .row{position:relative;z-index:1;background:#0E0E0F;transition:transform 300ms cubic-bezier(.32,.72,0,1)}
+.srow.drag .row{transition:none}
+.srow.open .row{transform:translateX(calc(var(--acts) * -58px))}
+.sacts{position:absolute;top:0;right:0;bottom:1.5px;display:flex}
+.sact{width:58px;height:100%;padding:0 4px;border:0;font:800 13px/1.15 var(--font);white-space:normal}
+.sact.gold{color:#1C1B15;background:linear-gradient(180deg,#FFF2B8 0%,#F9D65C 36%,#EFBF30 62%,#DCA61C 100%)}
+.sact.dark{color:#FAFAF7;text-shadow:0 -1px 0 rgba(0,0,0,.6);background:linear-gradient(180deg,#848890 0%,#62666D 36%,#51555B 62%,#45494F 100%);box-shadow:inset 1px 0 0 rgba(255,255,255,.18)}
+.srow.hint .row{animation:swHint 1.6s cubic-bezier(.32,.72,0,1) both}
+@keyframes swHint{0%{transform:none}30%,62%{transform:translateX(calc(var(--acts) * -58px))}100%{transform:none}}
+@media (prefers-reduced-motion:reduce){
+  .srow .row{transition:none}
+  .srow.hint .row{animation:swHintStep 1.6s step-end both}
+}
+@keyframes swHintStep{0%{transform:none}10%{transform:translateX(calc(var(--acts) * -58px))}75%{transform:none}}
+
+/* Event day: why an item is green, or what is missing */
+.whyst{display:flex;align-items:center;gap:10px;margin:14px 0 6px;font-size:17px;font-weight:800}
+.whyst .box{width:24px;height:24px}
+.whyst.on .box{background:var(--text)}
+.whyfacts{margin:6px 0 4px;padding:0 0 0 18px;font-size:15px;line-height:1.45}
+.whyfacts li{margin:3px 0}
+.dcontact{align-items:flex-start}
+.dcontact .v{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.dcontact .crows{align-self:stretch}
+.dcontact .crow{min-height:48px;gap:8px}
+.dcontact .crow .cl{display:none}                 /* the card's own "Contact" label says it; the links name the number or address */
+.dcontact .crow .cv{overflow-wrap:normal;word-break:normal}
+.dcontact .crow:last-child{border-bottom:0}
+.pknone{margin:14px 0 4px}

@@ -6,9 +6,10 @@
  * What it may write
  *   - Clients, Money, Event day and Designs tabs: only the typed columns named in the
  *     lists below (CLIENT_FIELDS, MONEY_FIELDS, EVENT_FIELDS, BRIEF_FIELDS and so on).
- *   - Payments and Expenses tabs: a new row in the next empty row.
- *   - Enquiries tab: a new row from the public form, and the Status, What happened
- *     and Booking ID cells.
+ *   - Payments and Expenses tabs: a new row in the next empty row, and the "Removed" cell of a row
+ *     (a date marks the row removed; every total skips it; no row is ever deleted).
+ *   - Enquiries tab: a new row from the public form, and the Status, What happened, Booking ID,
+ *     Got in touch by and Handle or number cells.
  *   - Google Drive: a brief photo, into the client's own folder inside the designs folder
  *     ("07 Client Designs", script property DESIGNS_FOLDER). The client's folder is named like the
  *     invoice folders, "005, Pearl", and is made the first time a photo is added.
@@ -41,6 +42,10 @@ const PHOTO_MAX_CHARS = 4000000;              // about 3 MB once decoded
 const PHOTOS_SHOWN = 12;
 
 const ENQUIRY_STATUSES = ['New', 'Waiting on response', 'Waiting on deposit', 'Cancelled'];
+/* A booking's status, as the client sheet sets it by hand. "Completed" is what the app calls Done. */
+const BOOKING_STATUSES = ['Waiting on deposit', 'Booked', 'Completed', 'Cancelled'];
+/* How a client got in touch. The Settings tab may hold its own list, called "Got in touch by". */
+const SOURCES = ['Instagram', 'Messenger', 'WhatsApp', 'TikTok', 'Text or call', 'Email', 'Website form'];
 const PACKING = ['Top board', 'Bottom board', 'Base', 'Laptop and charger', 'Camera', 'Monitor', 'Light',
   'Vintage phone', 'Speaker', 'Cable box', '10 m extension cord', 'Table message cards'];
 
@@ -48,19 +53,22 @@ const PACKING = ['Top board', 'Bottom board', 'Base', 'Laptop and charger', 'Cam
 const SPARE_LISTS = {
   'Yes': ['Yes'],
   'Payment type': ['Hire', 'Bond in', 'Bond back'],
+  'Got in touch by': SOURCES,
+  'Status by hand': ['Waiting on deposit', 'Booked', 'Completed'],
   'Expense type': ['Equipment', 'Running costs', 'Marketing', 'Software', 'Contractor']
 };
 
 /* Every heading the app looks for, tab by tab. checkTracker lists any that are missing. */
 const HEADINGS = {
   'Clients': ['Booking ID', 'Client name', 'Event date', 'Status', 'Next step', 'Phone', 'Email', 'Instagram', 'How they found us',
-    'Referred by', 'Event type', 'Venue', 'Suburb', 'Region', 'Package', 'Cancelled', 'Notes'],
-  'Enquiries': ['Received', 'Name', 'Instagram or phone', 'Event type', 'Event date', 'Message', 'Status', 'What happened', 'Booking ID'],
+    'Referred by', 'Event type', 'Venue', 'Suburb', 'Region', 'Package', 'Cancelled', 'Notes', 'Status by hand', 'Got in touch by', 'Handle or number'],
+  'Enquiries': ['Received', 'Name', 'Instagram or phone', 'Event type', 'Event date', 'Message', 'Status', 'What happened', 'Booking ID',
+    'Got in touch by', 'Handle or number'],
   'Money': ['Booking ID', 'Custom price', 'Highlight reel', 'Custom board and screen', 'No power point', 'Second event', 'Host hours',
     'Extra hours', 'Extra days', 'Travel fee', 'Discount', 'Package price', 'Extras', 'Total', 'Received', 'Owing', 'Invoice no.',
     'Bond', 'Costs logged', 'Other costs', 'Profit'],
-  'Payments': ['Date', 'Invoice no.', 'Client', 'Amount', 'What', 'Paid by or a note'],
-  'Expenses': ['Date', 'What', 'Type', 'Amount', 'Invoice no.', 'Client', 'Notes'],
+  'Payments': ['Date', 'Invoice no.', 'Client', 'Amount', 'What', 'Paid by or a note', 'Removed'],
+  'Expenses': ['Date', 'What', 'Type', 'Amount', 'Invoice no.', 'Client', 'Notes', 'Removed'],
   'Event day': ['Booking ID', 'Hours', 'Power point', 'Setup time', 'Start time', 'Who is running it', 'Venue confirmed', 'Power sorted',
     'Packed', 'Packed items', 'Day notes', 'Fee paid in full', 'Bond paid', 'Board design approved', 'Start time set'],
   'Videos': ['Booking ID', 'Guest messages', 'Videos sent', 'Drive folder link', 'Link ends', 'Clips OK to share', 'OK to send offers', 'Review'],
@@ -73,8 +81,11 @@ const REPORTS = { income: 'Income', expenses: 'Expenses', profit: 'Profit', expe
 const CLIENT_FIELDS = {
   'Client name': 'text', 'Event date': 'date', 'Phone': 'text', 'Email': 'text', 'Instagram': 'text',
   'How they found us': 'list:How they found us', 'Referred by': 'text', 'Event type': 'list:Event type',
-  'Venue': 'text', 'Suburb': 'text', 'Region': 'list:Region', 'Package': 'package', 'Notes': 'text'
+  'Venue': 'text', 'Suburb': 'text', 'Region': 'list:Region', 'Package': 'package', 'Notes': 'text',
+  'Got in touch by': 'list:Got in touch by', 'Handle or number': 'text'
 };
+/* Columns added on 27 Nov 2026. A booking still saves on a tracker that doesn't have them yet; it just leaves them out. */
+const NEWER_CLIENT_FIELDS = ['Got in touch by', 'Handle or number'];
 const MONEY_FIELDS = {
   'Custom price': 'num', 'Highlight reel': 'yes', 'Custom board and screen': 'yes', 'No power point': 'yes',
   'Second event': 'yes', 'Host hours': 'num', 'Extra hours': 'num', 'Extra days': 'num', 'Travel fee': 'num',
@@ -82,12 +93,13 @@ const MONEY_FIELDS = {
 };
 const PAYMENT_FIELDS = { 'Date': 'date', 'Invoice no.': 'text', 'Amount': 'num', 'What': 'list:Payment type', 'Paid by or a note': 'text' };
 const EXPENSE_FIELDS = { 'Date': 'date', 'What': 'text', 'Type': 'list:Expense type', 'Amount': 'num', 'Invoice no.': 'text', 'Notes': 'text' };
-/* Aadil ticks every Event day item himself (26 Nov 2026): the app ticks none of them by itself. */
+/* A tick by hand on Event day keeps the date it was ticked (27 Nov 2026); an older "Yes" still counts as ticked.
+   Four of the seven also go green by themselves in the app, from the money, the designs and the start time. */
 const EVENT_FIELDS = {
-  'Setup time': 'time', 'Start time': 'time', 'Who is running it': 'text', 'Venue confirmed': 'yes', 'Power sorted': 'yes',
-  'Fee paid in full': 'yes', 'Bond paid': 'yes', 'Board design approved': 'yes', 'Start time set': 'yes'
+  'Setup time': 'time', 'Start time': 'time', 'Who is running it': 'text', 'Venue confirmed': 'tick', 'Power sorted': 'tick',
+  'Fee paid in full': 'tick', 'Bond paid': 'tick', 'Board design approved': 'tick', 'Start time set': 'tick'
 };
-const DESIGN_TICKS = { 'Sticker printed': 'yes' };      // ticked on the Event day screen, kept on the Designs tab
+const DESIGN_TICKS = { 'Sticker printed': 'tick' };     // ticked on the Event day screen, kept on the Designs tab
 /* The brief, as the app names each part, and the Designs column it is kept in. */
 const BRIEF_FIELDS = {
   names: 'Names or title', line2: 'Second line', defaultWording: 'Default screen wording', thanksWording: 'Thank you wording',
@@ -154,6 +166,9 @@ const CHANGES = {
   addBooking: arg => addBooking_(arg),
   addPayment: arg => addPayment_(arg),
   addExpense: arg => addExpense_(arg),
+  removeEntries: arg => removeEntries_(arg),
+  setBookingStatus: arg => setBookingStatus_(arg),
+  setContact: arg => setContact_(arg),
   setEventDay: arg => setEventDay_(arg),
   setPacking: arg => setPacking_(arg),
   saveBrief: arg => saveBrief_(arg),
@@ -257,7 +272,7 @@ function listTab_(name) {
 
 function enquiryTab_() {
   const tab = headed_(TAB.enquiries, ['Received', 'Name']);
-  HEADINGS['Enquiries'].forEach(heading => {
+  HEADINGS['Enquiries'].filter(heading => !NEWER_CLIENT_FIELDS.includes(heading)).forEach(heading => {
     if (!tab.col[heading]) throw new Error('The Enquiries tab is missing its "' + heading + '" heading. Tell Aadil.');
   });
   return tab;
@@ -328,7 +343,7 @@ function read_(lists, problems) {
     readAt: Date.now(),
     today: Utilities.formatDate(new Date(), timeZone, 'yyyy-MM-dd'),
     bookings: readBookings_(day, wrong),
-    enquiries: tryTo(() => readEnquiries_(day), []),
+    enquiries: tryTo(() => readEnquiries_(day, wrong), []),
     payments: tryTo(() => readPayments_(day, wrong), []),
     expenses: tryTo(() => readExpenses_(day, wrong), []),
     reports: tryTo(() => readReports_(), null),
@@ -358,18 +373,19 @@ function readBookings_(day, problems) {
   every.forEach((row, i) => { if (String(row[clients.col['Client name'] - 1]).trim()) count = i + 1; });
   if (!count) return [];
 
-  /* One of the other booking tabs, read once. display = as the cells show, which suits times and ticks. */
+  /* One of the other booking tabs, read once. display = as the cells show, which suits times. raw(i, heading) = the value
+     itself, for a tick that holds the date it was ticked. */
   const side = (name, display) => {
     try {
       const tab = bookingTab_(name);
       missing_(tab, problems);
       if (tab.headRow !== clients.headRow) throw new Error('The ' + name + ' tab no longer lines up with the Clients tab, so it was not read.');
       const range = tab.sheet.getRange(first, 1, count, tab.width);
-      const rows = display ? range.getDisplayValues() : range.getValues();
-      return { tab: tab, cell: (i, heading) => tab.col[heading] ? rows[i][tab.col[heading] - 1] : '' };
+      const rows = display ? range.getDisplayValues() : range.getValues(), values = display ? range.getValues() : rows;
+      return { tab: tab, cell: (i, heading) => tab.col[heading] ? rows[i][tab.col[heading] - 1] : '', raw: (i, heading) => tab.col[heading] ? values[i][tab.col[heading] - 1] : '' };
     } catch (err) {
       problems.push(String((err && err.message) || err));
-      return { tab: null, cell: () => '' };
+      return { tab: null, cell: () => '', raw: () => '' };
     }
   };
   const money = side(TAB.money, false), eventDay = side(TAB.eventDay, true), videos = side(TAB.videos, true), designs = side(TAB.designs, false);
@@ -379,6 +395,7 @@ function readBookings_(day, problems) {
 
   const text = value => String(value == null ? '' : value).trim();
   const number = value => Number(value) || 0;
+  const tick = value => isDate_(value) ? day(value) : text(value);          // "2026-11-25" when ticked by hand on a day, or an older "Yes"
   const bookings = [];
   every.slice(0, count).forEach((row, i) => {
     const cell = heading => clients.col[heading] ? row[clients.col[heading] - 1] : '';
@@ -404,6 +421,9 @@ function readBookings_(day, problems) {
       pkg: text(cell('Package')),
       cancelled: text(cell('Cancelled')),
       notes: text(cell('Notes')),
+      statusByHand: text(cell('Status by hand')),
+      gotInTouch: text(cell('Got in touch by')),
+      handle: text(cell('Handle or number')),
 
       invoice: text(money.cell(i, 'Invoice no.')),
       total: number(money.cell(i, 'Total')),
@@ -432,12 +452,12 @@ function readBookings_(day, problems) {
         setupTime: text(eventDay.cell(i, 'Setup time')),
         startTime: text(eventDay.cell(i, 'Start time')),
         runningIt: text(eventDay.cell(i, 'Who is running it')),
-        venueConfirmed: text(eventDay.cell(i, 'Venue confirmed')),
-        powerSorted: text(eventDay.cell(i, 'Power sorted')),
-        feePaid: text(eventDay.cell(i, 'Fee paid in full')),
-        bondPaid: text(eventDay.cell(i, 'Bond paid')),
-        designApproved: text(eventDay.cell(i, 'Board design approved')),
-        startSet: text(eventDay.cell(i, 'Start time set')),
+        venueConfirmed: tick(eventDay.raw(i, 'Venue confirmed')),
+        powerSorted: tick(eventDay.raw(i, 'Power sorted')),
+        feePaid: tick(eventDay.raw(i, 'Fee paid in full')),
+        bondPaid: tick(eventDay.raw(i, 'Bond paid')),
+        designApproved: tick(eventDay.raw(i, 'Board design approved')),
+        startSet: tick(eventDay.raw(i, 'Start time set')),
         packed: text(eventDay.cell(i, 'Packed')),
         packedItems: text(eventDay.cell(i, 'Packed items')),
         notes: text(eventDay.cell(i, 'Day notes'))
@@ -456,7 +476,7 @@ function readBookings_(day, problems) {
         board: text(designs.cell(i, 'Board design')),
         screen: text(designs.cell(i, 'Screen design')),
         canva: canva[i] || '',
-        stickerPrinted: text(designs.cell(i, 'Sticker printed')),
+        stickerPrinted: tick(designs.raw(i, 'Sticker printed')),
         names: text(designs.cell(i, 'Names or title')),
         line2: text(designs.cell(i, 'Second line')),
         defaultWording: text(designs.cell(i, 'Default screen wording')),
@@ -484,12 +504,13 @@ function links_(tab, heading, firstRow, count) {
   });
 }
 
-function readEnquiries_(day) {
+function readEnquiries_(day, problems) {
   const tab = enquiryTab_(), last = tab.sheet.getLastRow();
+  NEWER_CLIENT_FIELDS.forEach(heading => { if (!tab.col[heading] && problems) problems.push('The Enquiries tab is missing its "' + heading + '" heading.'); });
   if (last < 2) return [];
   const enquiries = [];
   tab.sheet.getRange(2, 1, last - 1, tab.width).getValues().forEach((row, i) => {
-    const cell = heading => row[tab.col[heading] - 1];
+    const cell = heading => tab.col[heading] ? row[tab.col[heading] - 1] : '';
     const name = String(cell('Name')).trim();
     if (!name) return;
     const eventDate = cell('Event date');
@@ -503,7 +524,9 @@ function readEnquiries_(day) {
       message: String(cell('Message')),
       status: String(cell('Status')),
       what: String(cell('What happened')),
-      bookingId: String(cell('Booking ID'))
+      bookingId: String(cell('Booking ID')),
+      gotInTouch: String(cell('Got in touch by')).trim(),
+      handle: String(cell('Handle or number')).trim()
     });
   });
   return enquiries;
@@ -530,7 +553,8 @@ function readPayments_(day, problems) {
       client: String(cell('Client')).trim(),
       amount: amount,
       what: what,
-      note: String(cell('Paid by or a note')).trim()
+      note: String(cell('Paid by or a note')).trim(),
+      removed: day(cell('Removed'))
     });
   });
   return payments;
@@ -552,7 +576,8 @@ function readExpenses_(day, problems) {
       amount: amount,
       invoice: String(cell('Invoice no.')).trim(),
       client: String(cell('Client')).trim(),
-      notes: String(cell('Notes')).trim()
+      notes: String(cell('Notes')).trim(),
+      removed: day(cell('Removed'))
     });
   });
   return expenses;
@@ -595,7 +620,7 @@ function enquire_(arg) {
     if (row > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), 50);
 
     // The row is new and empty, so its cells go in as one block: one write instead of seven.
-    const headings = ['Received'].concat(Object.keys(enquiry), ['Status']);
+    const headings = ['Received'].concat(Object.keys(enquiry), ['Status'], tab.col['Got in touch by'] ? ['Got in touch by'] : []);
     const firstCol = Math.min.apply(null, headings.map(h => tab.col[h]));
     const width = Math.max.apply(null, headings.map(h => tab.col[h])) - firstCol + 1;
     const values = new Array(width).fill(''), formats = new Array(width).fill('General');
@@ -603,6 +628,7 @@ function enquire_(arg) {
     place('Received', now, 'd mmm yyyy h:mm');
     Object.keys(enquiry).forEach(heading => place(heading, enquiry[heading], '@'));
     place('Status', 'New', 'General');
+    if (tab.col['Got in touch by']) place('Got in touch by', 'Website form', 'General');
     sheet.getRange(row, firstCol, 1, width).setNumberFormats([formats]).setValues([values]);
   });
 
@@ -660,13 +686,49 @@ function setEnquiryStatus_(arg) {
   });
 
   const booking = status === 'Waiting on deposit' ? newBooking_(bookingFromEnquiry_(cell, arg.eventDate, lists), lists) : { id: '', row: 0, invoice: '' };
-
-  const what = status === 'Waiting on deposit' ? 'Moved to bookings' : status === 'Cancelled' ? 'Cancelled' : '';
-  sheet.getRange(row, tab.col['Status']).setValue(status);
-  sheet.getRange(row, tab.col['What happened']).setValue(what);
-  sheet.getRange(row, tab.col['Booking ID']).setNumberFormat('@').setValue(booking.id);
+  closeEnquiry_(tab, row, status, booking.id);
   SpreadsheetApp.flush();
   return { id: booking.id, row: booking.row, invoice: booking.invoice, data: read_(lists) };
+}
+
+/** Sets an enquiry's Status, What happened and Booking ID cells. */
+function closeEnquiry_(tab, row, status, bookingId) {
+  const what = status === 'Waiting on deposit' ? 'Moved to bookings' : status === 'Cancelled' ? 'Cancelled' : '';
+  tab.sheet.getRange(row, tab.col['Status']).setValue(status);
+  tab.sheet.getRange(row, tab.col['What happened']).setValue(what);
+  tab.sheet.getRange(row, tab.col['Booking ID']).setNumberFormat('@').setValue(bookingId);
+}
+
+/**
+ * The enquiry row that a booking is being made from (Keen on the client sheet), checked: still there, the same name,
+ * not booked already, no formulas in the cells that close it. Gives back {tab, row, cell}.
+ */
+function openEnquiry_(given) {
+  const tab = enquiryTab_(), row = Number(given && given.row);
+  if (!(row > 1 && row <= tab.sheet.getLastRow())) throw new Error('That enquiry is no longer there. Press Refresh.');
+  const line = tab.sheet.getRange(row, 1, 1, tab.width), values = line.getValues()[0], formulas = line.getFormulas()[0];
+  const cell = heading => tab.col[heading] ? values[tab.col[heading] - 1] : '';
+  if (String(cell('Name')).trim() !== String(given.name).trim()) throw new Error('The enquiries have moved. Press Refresh and try again.');
+  if (String(cell('What happened')).trim() === 'Moved to bookings' || String(cell('Booking ID')).trim()) {
+    throw new Error('This enquiry is already booking ' + (String(cell('Booking ID')).trim() || 'on the Clients tab') + '.');
+  }
+  ['Status', 'What happened', 'Booking ID'].forEach(heading => {
+    if (formulas[tab.col[heading] - 1]) throw new Error(heading + ' on the Enquiries tab holds a formula, so nothing was changed.');
+  });
+  return { tab: tab, row: row, cell: cell };
+}
+
+/** How an enquiry got in touch: its own column, or worked out from its contact text where that is clear. */
+function sourceOf_(cell) {
+  const said = String(cell('Got in touch by') || '').trim(), handle = String(cell('Handle or number') || '').trim();
+  if (said) return { source: said, handle: handle };
+  const contact = String(cell('Instagram or phone') || '').trim();
+  const insta = /^instagram\s+(@\S+)/i.exec(contact), phone = /^phone\s+([\d\s()+-]{7,})$/i.exec(contact);
+  if (insta) return { source: 'Instagram', handle: insta[1] };
+  if (phone) return { source: 'Text or call', handle: phone[1].trim() };
+  if (/^[\d\s()+-]{7,}$/.test(contact)) return { source: 'Text or call', handle: contact };
+  if (/^\S+@\S+\.\S+$/.test(contact)) return { source: 'Email', handle: contact };
+  return { source: '', handle: '' };
 }
 
 /** Turns an enquiry row into the fields of a new booking. cell(heading) gives the enquiry's values. */
@@ -692,6 +754,10 @@ function bookingFromEnquiry_(cell, askedDate, lists) {
   const message = String(cell('Message')).trim(), venue = /venue:\s*([^\n]+)/i.exec(message);
   if (venue) fields['Venue'] = venue[1].trim();
 
+  const from = sourceOf_(cell);                               // how they got in touch carries over to the booking
+  if (from.source) fields['Got in touch by'] = from.source;
+  if (from.handle) fields['Handle or number'] = from.handle;
+
   const received = cell('Received');
   const note = ['From the enquiry' + (isDate_(received) ? ' of ' + Utilities.formatDate(received, timeZone, 'd MMM yyyy') : '') + '.'];
   if (!fields['Event type'] && type) note.push('Event type: ' + type + '.');
@@ -703,9 +769,21 @@ function bookingFromEnquiry_(cell, askedDate, lists) {
 
 /* ---------- bookings ---------- */
 
-/** fields = {heading: value}, from the app's add-a-booking form. Call with the lock held. */
-function addBooking_(fields) {
-  const lists = lists_(), booking = newBooking_(fields, lists);
+/**
+ * From the app's add-a-booking form: arg = {heading: value}, or {fields: {heading: value}, enquiry: {row, name}} for a booking
+ * made from an enquiry (Keen). That enquiry is then closed as "Moved to bookings", with the new booking ID, and how they
+ * got in touch carries over if the form didn't say. Call with the lock held.
+ */
+function addBooking_(arg) {
+  const lists = lists_(), fields = Object.assign({}, arg && arg.fields ? arg.fields : arg);
+  const from = arg && arg.fields && arg.enquiry ? openEnquiry_(arg.enquiry) : null;
+  if (from) {
+    const source = sourceOf_(from.cell);
+    if (!String(fields['Got in touch by'] || '').trim() && source.source) fields['Got in touch by'] = source.source;
+    if (!String(fields['Handle or number'] || '').trim() && source.handle) fields['Handle or number'] = source.handle;
+  }
+  const booking = newBooking_(fields, lists);
+  if (from) closeEnquiry_(from.tab, from.row, 'Waiting on deposit', booking.id);
   SpreadsheetApp.flush();
   return { id: booking.id, row: booking.row, invoice: booking.invoice, data: read_(lists) };
 }
@@ -731,6 +809,7 @@ function newBooking_(fields, lists) {
 
   const clients = bookingTab_(TAB.clients), money = bookingTab_(TAB.money);
   if (clients.headRow !== money.headRow) throw new Error('The Clients and Money tabs no longer line up. Nothing was changed.');
+  NEWER_CLIENT_FIELDS.forEach(heading => { if (!clients.col[heading]) delete fields[heading]; });
   need_(clients, 'Booking ID'); need_(clients, 'Client name'); need_(money, 'Invoice no.');
 
   // Find the first row with no client name, and the booking IDs and invoice numbers in use.
@@ -787,6 +866,8 @@ function checkValue_(heading, type, text, lists) {
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(text)) throw new Error(heading + ' needs a time.');
   } else if (type === 'yes') {
     if (!options_(lists, 'Yes').includes(text)) throw new Error(heading + ' can only be Yes or empty.');
+  } else if (type === 'tick') {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(text) && !options_(lists, 'Yes').includes(text)) throw new Error(heading + ' can only be the day it was ticked, Yes or empty.');
   } else if (type === 'package') {
     if (!lists.packages.some(p => p.name === text)) throw new Error('"' + text + '" is not a package on the Prices tab.');
   } else if (type.indexOf('list:') === 0) {
@@ -800,7 +881,7 @@ function writeValue_(write) {
     cell.clearContent();                          // keeps the cell's dropdown and its look
   } else if (write.type === 'num') {
     cell.setValue(Math.round(Number(text) * 100) / 100);
-  } else if (write.type === 'date') {
+  } else if (write.type === 'date' || (write.type === 'tick' && /^\d{4}-\d{2}-\d{2}$/.test(text))) {
     const parts = text.split('-').map(Number);
     const unformatted = /^(general|0\.?#*)$/i.test(cell.getNumberFormat());
     cell.setValue(serial_(parts[0], parts[1], parts[2]));
@@ -891,7 +972,7 @@ function addPayment_(arg) {
   lines.forEach(line => { if (!line['What']) throw new Error('A payment needs to be Hire, Bond in or Bond back.'); });
   const row = addRows_(listTab_(TAB.payments), PAYMENT_FIELDS, lines, lists);
   SpreadsheetApp.flush();
-  return { row: row, data: read_(lists) };
+  return { row: row, rows: lines.map((line, i) => row + i), data: read_(lists) };
 }
 
 /** arg = {what, amount, type, invoice, notes}. The invoice number is only for a cost that was for one client. Dated today. */
@@ -907,14 +988,95 @@ function addExpense_(arg) {
   if (!line['Type']) throw new Error('An expense needs a type.');
   const row = addRows_(listTab_(TAB.expenses), EXPENSE_FIELDS, [line], lists);
   SpreadsheetApp.flush();
-  return { row: row, data: read_(lists) };
+  return { row: row, rows: [row], data: read_(lists) };
+}
+
+/**
+ * Marks rows of Payments or Expenses removed, with today's date in their "Removed" cell, or (restore) clears it again.
+ * Nothing is deleted. arg = {entries: [{tab: 'Payments' or 'Expenses', row, amount, invoice, what}], restore}.
+ * Each entry says what the row holds, so a row that has changed since the app read it is never touched.
+ */
+function removeEntries_(arg) {
+  const entries = Array.isArray(arg.entries) ? arg.entries : [];
+  if (!entries.length || entries.length > 3) throw new Error('There is nothing to remove.');
+  const lists = lists_(), stamp = arg.restore ? '' : today_();
+  let writes = [];
+  entries.forEach(entry => {
+    const name = entry.tab === 'Payments' ? TAB.payments : entry.tab === 'Expenses' ? TAB.expenses : '';
+    if (!name) throw new Error('Only payments and expenses can be removed.');
+    const tab = listTab_(name), row = Number(entry.row);
+    need_(tab, 'Removed');
+    if (!(row > tab.headRow && row <= tab.sheet.getLastRow() && row === Math.floor(row))) throw new Error('That entry is no longer there. Press Refresh.');
+    const line = tab.sheet.getRange(row, 1, 1, tab.width).getValues()[0], cell = heading => tab.col[heading] ? line[tab.col[heading] - 1] : '';
+    const same = Math.abs((Number(cell('Amount')) || 0) - (Number(entry.amount) || 0)) < 0.005 &&
+      String(cell('Invoice no.')).trim() === String(entry.invoice || '').trim() && String(cell('What')).trim() === String(entry.what || '').trim();
+    if (!same) throw new Error('The ' + name + ' tab has changed since the app read it. Press Refresh and try again.');
+    writes = writes.concat(checked_(tab, row, [{ heading: 'Removed', type: 'date', text: stamp }], lists));
+  });
+  writes.forEach(writeValue_);
+  SpreadsheetApp.flush();
+  return { data: read_(lists) };
+}
+
+/* ---------- a booking's status, set by hand on the client sheet ---------- */
+
+/**
+ * arg = {row, id, status} or {row, id, restore: {byHand, cancelled}} (Undo).
+ * Cancelled ticks the Cancelled column. Any other status goes in "Status by hand", which the tracker's Status formula
+ * uses first; if the formula gives that status anyway, "Status by hand" is left empty, so it keeps following the money.
+ * Gives back what the two cells held before, for Undo.
+ */
+function setBookingStatus_(arg) {
+  const row = bookingRow_(arg), clients = bookingTab_(TAB.clients), lists = lists_();
+  need_(clients, 'Status'); need_(clients, 'Status by hand'); need_(clients, 'Cancelled');
+  const shown = heading => String(clients.sheet.getRange(row, clients.col[heading]).getDisplayValue()).trim();
+  const before = { byHand: shown('Status by hand'), cancelled: shown('Cancelled') };
+  const write = (byHand, cancelled) => checked_(clients, row, [
+    { heading: 'Status by hand', type: 'list:Status by hand', text: byHand },
+    { heading: 'Cancelled', type: 'yes', text: cancelled }
+  ], lists).forEach(writeValue_);
+  if (arg.restore) {
+    write(String(arg.restore.byHand || '').trim(), String(arg.restore.cancelled || '').trim());
+  } else {
+    const status = String(arg.status || '').trim();
+    if (!BOOKING_STATUSES.includes(status)) throw new Error('"' + status + '" is not a booking status.');
+    if (status === 'Cancelled') write('', options_(lists, 'Yes')[0]);
+    else {
+      write('', '');
+      SpreadsheetApp.flush();
+      if (shown('Status') !== status) write(status, '');
+    }
+  }
+  SpreadsheetApp.flush();
+  return { before: before, status: shown('Status'), data: read_(lists) };
+}
+
+/* ---------- how a client got in touch ---------- */
+
+/**
+ * arg = {kind: 'booking', row, id, source, handle} or {kind: 'enquiry', row, name, source, handle}.
+ * source is one of the "Got in touch by" options (or empty); handle is a handle or number, and may be empty.
+ */
+function setContact_(arg) {
+  const lists = lists_(), source = String(arg.source || '').trim(), handle = tidy_(arg.handle, 80);
+  const items = [{ heading: 'Got in touch by', type: 'list:Got in touch by', text: source }, { heading: 'Handle or number', type: 'text', text: handle }];
+  if (arg.kind === 'enquiry') {
+    const tab = enquiryTab_(), row = Number(arg.row);
+    if (!(row > 1 && row <= tab.sheet.getLastRow())) throw new Error('That enquiry is no longer there. Press Refresh.');
+    if (String(tab.sheet.getRange(row, tab.col['Name']).getValue()).trim() !== String(arg.name).trim()) throw new Error('The enquiries have moved. Press Refresh and try again.');
+    checked_(tab, row, items, lists).forEach(writeValue_);
+  } else {
+    checked_(bookingTab_(TAB.clients), bookingRow_(arg), items, lists).forEach(writeValue_);
+  }
+  return { saved: true };
 }
 
 /* ---------- event day ---------- */
 
 /**
  * arg = {row, id, field, value}. Saves one detail or tick for a booking.
- * field is Setup time, Start time (value "16:30"), Who is running it, or one of the ticks (value "Yes"):
+ * field is Setup time, Start time (value "16:30"), Who is running it, or one of the ticks (value: the day it was
+ * ticked, "2026-11-25", or "Yes"):
  * Fee paid in full, Bond paid, Board design approved, Venue confirmed, Start time set, Power sorted, and
  * Sticker printed (kept on the Designs tab). An empty value clears it.
  */

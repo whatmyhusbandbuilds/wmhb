@@ -1,5 +1,6 @@
 "use strict";
-/* wmhb app: the Clients screen. The calendar, the list, the filter, the enquiry status picker and "Add a booking". */
+/* wmhb app: the Clients screen, the hub: every change for a client starts here. The calendar, the list (a row swipes left
+   for quick buttons on a phone), the filter, and "Add a booking". A client opens their sheet (client.js) from anywhere. */
 
 /* Enquiry dates are typed by clients: "5 December 2026", "January 2027", or nothing. */
 function parseLoose(t) {
@@ -87,7 +88,7 @@ SCREENS.clients = {
       "<div class=\"key\"><span><i class=\"dot\" aria-hidden=\"true\"></i>Booked</span><span><i class=\"dot waiting\" aria-hidden=\"true\"></i>Waiting on deposit</span><span><i class=\"keyq wm-card\" aria-hidden=\"true\"></i>Enquiry</span><span><i class=\"bang\" aria-hidden=\"true\">!</i>Clash</span></div></div>" +
       "<div class=\"list\" id=\"list\"></div></div>";
   },
-  fill() { drawFilter(); drawCal(); drawList(); }
+  fill(first) { drawFilter(); drawCal(); drawList(); if (first) swipeHint(); }
 };
 
 /* ---------- filter: a panel on a laptop, a sheet on the phone ---------- */
@@ -156,12 +157,10 @@ function drawCal() {
       const bang = clash ? "<span class=\"bang\" role=\"img\" aria-label=\"Clash\">!</span>" : "";
       /* more than one thing on a day: the day opens a sheet with all of them (the day alone used to reach only the first enquiry) */
       if (its.length > 1) h += "<div class=\"pc wm-cell" + cls + "\"><button type=\"button\" class=\"pcb\" data-do=\"day\" data-day=\"" + iso + "\" data-fid=\"c-" + iso + "\" aria-haspopup=\"dialog\" aria-label=\"" + its.length + " things on " + fmt(iso) + ": " + esc(its.map(i => i.name + ", " + word(i)).join("; ")) + "\">" + inner + "</button>" + bang + "</div>";
-      else h += "<div class=\"pc wm-cell" + cls + "\">" + (q ? "<button type=\"button\" class=\"pcb\" data-do=\"item\" data-item=\"" + q.id + "\" data-fid=\"c-" + iso + "\" aria-haspopup=\"dialog\" aria-label=\"Change the status of " + esc(q.name) + ", " + fmt(iso) + "\">" + inner + "</button>"
-        : inner + (its.length ? "<span class=\"sr\">" + esc(its.map(word).join(", ")) + "</span>" : "")) + bang + "</div>";
+      else h += "<div class=\"pc wm-cell" + cls + "\">" + (its.length ? "<button type=\"button\" class=\"pcb\" data-do=\"item\" data-item=\"" + its[0].id + "\" data-fid=\"c-" + iso + "\" aria-haspopup=\"dialog\" aria-label=\"Open " + esc(its[0].name) + ", " + word(its[0]) + ", " + fmt(iso) + "\">" + inner + "</button>" : inner) + bang + "</div>";      /* anyone on the day opens their sheet: booked, waiting or an enquiry */
     } else {
-      h += "<div class=\"lc" + cls + (its.length ? " has" : "") + "\"><div class=\"dn\">" + p.d + "</div>" + its.map(i => i.booking
-        ? "<div class=\"pill " + i.kind + "\">" + esc(i.short) + "<span class=\"sr\">, " + word(i) + "</span></div>"
-        : "<button type=\"button\" class=\"pill enquiry\" data-do=\"item\" data-item=\"" + i.id + "\" data-fid=\"c-" + i.id + "\" aria-haspopup=\"dialog\" aria-label=\"Change the status of " + esc(i.name) + ", " + fmt(iso) + "\">" + esc(i.short) + "</button>").join("") + (clash ? "<span class=\"ctag\">Clash</span>" : "") + "</div>";
+      h += "<div class=\"lc" + cls + (its.length ? " has" : "") + "\"><div class=\"dn\">" + p.d + "</div>" + its.map(i =>
+        "<button type=\"button\" class=\"pill " + i.kind + "\" data-do=\"item\" data-item=\"" + i.id + "\" data-fid=\"c-" + i.id + "\" aria-haspopup=\"dialog\" aria-label=\"Open " + esc(i.name) + ", " + word(i) + ", " + fmt(iso) + "\">" + esc(i.short) + "</button>").join("") + (clash ? "<span class=\"ctag\">Clash</span>" : "") + "</div>";
     }
   }
   $("#grid").innerHTML = h;
@@ -172,12 +171,19 @@ function drawCal() {
 }
 
 /* ---------- the list ---------- */
+/* The quick buttons behind a row swiped left, by where the client is up to: [tap, words, look]. */
+const quickActs = i => i.kind === "booked" ? [["q-pay", "Payment in", "gold"], ["q-bond", "Bond", "dark"], ["q-more", "More", "dark"]]
+  : i.kind === "waiting" ? [["q-deposit", "Deposit in", "gold"], ["q-more", "More", "dark"]] : [["q-keen", "Keen", "gold"], ["q-status", "Status", "dark"]];
 function rowHtml(i) {
   const p = i.date ? dParts(i.date) : null, mon = /^([A-Za-z]{3})[a-z]*\s+(\d{4})$/.exec(i.dateText);
   const when = p ? "<span>" + p.wd + "</span><span>" + p.d + " " + p.mo + "</span>" : "<span>No date</span><span>" + esc(mon ? mon[1] + " " + mon[2] : i.dateText || "yet") + "</span>";
-  const body = "<span class=\"when\">" + when + "</span><span class=\"who\"><span class=\"n\">" + esc(i.name) + "</span><span class=\"s\">" + esc([i.type, i.venue].filter(Boolean).join(", ")) + "</span><span class=\"bs\">" + badges(i) + "</span></span>";
-  /* a booking shows its invoice number, the reference used everywhere */
-  return i.booking ? "<div class=\"row\">" + body + (txt(i.ref.invoice) ? "<span class=\"inv\">" + esc(i.ref.invoice) + "</span>" : "") + "</div>" : "<button type=\"button\" class=\"row\" data-do=\"item\" data-item=\"" + i.id + "\" data-fid=\"r-" + i.id + "\" aria-haspopup=\"dialog\">" + body + "<span class=\"chg\">Change</span></button>";
+  const body = "<span class=\"when\">" + when + "</span><span class=\"who\"><span class=\"n\">" + esc(i.name) + "</span><span class=\"s\">" + esc([i.type, i.venue].filter(Boolean).join(", ")) + "</span><span class=\"bs\">" + badges(i) + sourceTag(sourceOf(i.ref, !i.booking), i.id, true) + "</span></span>";
+  /* a booking shows its invoice number, the reference used everywhere. Tapping a row opens the client. */
+  const row = "<button type=\"button\" class=\"row\" data-do=\"item\" data-item=\"" + i.id + "\" data-fid=\"r-" + i.id + "\" aria-haspopup=\"dialog\">" + body + (i.booking && txt(i.ref.invoice) ? "<span class=\"inv\">" + esc(i.ref.invoice) + "</span>" : "") + "</button>";
+  if (!phone()) return row;
+  const acts = quickActs(i);
+  return "<div class=\"srow\" data-sid=\"" + i.id + "\" style=\"--acts:" + acts.length + "\"><div class=\"sacts\" aria-hidden=\"true\">" + acts.map(a =>
+    "<button type=\"button\" class=\"sact " + a[2] + "\" data-do=\"" + a[0] + "\" data-who=\"" + i.id + "\" data-fid=\"" + a[0] + "-" + i.id + "\" tabindex=\"-1\">" + a[1] + "</button>").join("") + "</div>" + row + "</div>";
 }
 function drawList() {
   if (!$("#list")) return;
@@ -188,72 +194,56 @@ function drawList() {
     (enq.length ? sec("Enquiries with no date yet", enq.map(rowHtml).join("")) : "") + (bk.length ? sec("Bookings with no date yet", bk.map(rowHtml).join("")) : "");
 }
 
-/* ---------- enquiry status picker ---------- */
-const OPTS = [
-  ["New", "enquiry", "Nobody has replied yet"],
-  ["Waiting on response", "enquiry", "We replied, waiting to hear back"],
-  ["Waiting on deposit", "waiting", "They want to book. It moves to bookings and turns yellow."],
-  ["Cancelled", "gone", "Hides it from the calendar. It stays in the tracker."]
-];
-function enquiryHead(i) {
-  const when = i.date ? fmt(i.date) + (dParts(i.date).y !== +todayIso().slice(0, 4) ? " " + dParts(i.date).y : "") : i.dateText || "no date yet";
-  return "<div class=\"pk-k\">Enquiry</div><h2 id=\"dlg-title\" tabindex=\"-1\">" + esc(i.name) + "</h2><p class=\"pk-e\">" + esc([i.type, i.venue, when].filter(Boolean).join(", ")) + "</p>" + (i.contact ? "<p class=\"pk-c\">" + esc(i.contact) + "</p>" : "");
-}
-let picked = "";                         /* the enquiry the picker is showing */
-/**
- * A day with more than one thing on it (two enquiries, or a booking and an enquiry): everything on it, each with its name,
- * where it is up to, and a Change button. An enquiry's Change opens its status, as in the list; a booking's opens its
- * payments, which is where a booking changes.
- */
+/* ---------- the day's list, the date step, and an enquiry's status (shown on the client sheet, client.js) ---------- */
+let picked = "";                         /* the enquiry the date step is for */
+/** A day with more than one thing on it: everything on it, each row opening that client's sheet. */
 function openDay(iso) {
   const its = S.items.filter(i => i.date === iso && match(i)); if (!its.length) return;
   show("day", "<h2 id=\"dlg-title\" tabindex=\"-1\" class=\"tight\">" + esc(fmt(iso)) + "</h2><p class=\"sub\">" + its.length + " on this day" + (S.clash.has(iso) ? ", a clash" : "") + "</p>" +
-    its.map(i => "<div class=\"dayrow\"><span class=\"dot " + i.kind + "\" aria-hidden=\"true\"></span><span class=\"tl\"><span>" + esc(i.name) + "</span><span>" + esc(statusWords(i)) + "</span></span>" +
-      "<button class=\"cardbtn wm-card\" type=\"button\" data-do=\"day-change\" data-item=\"" + i.id + "\" data-fid=\"dc-" + i.id + "\" aria-label=\"Change " + esc(i.name) + "\">Change</button></div>").join("") +
+    its.map(i => "<button class=\"dayrow\" type=\"button\" data-do=\"day-change\" data-item=\"" + i.id + "\" data-fid=\"dc-" + i.id + "\" aria-haspopup=\"dialog\" aria-label=\"Open " + esc(i.name) + ", " + esc(statusWords(i)) + "\"><span class=\"dot " + i.kind + "\" aria-hidden=\"true\"></span><span class=\"tl\"><span>" + esc(i.name) + "</span><span>" + esc(statusWords(i)) + "</span></span>" +
+      "<span class=\"dgo\" aria-hidden=\"true\">Open</span></button>").join("") +
     "<button class=\"btn big done\" type=\"button\" data-do=\"close\">Done</button>");
 }
-function openPicker(i) {
-  picked = i.id;
-  const others = i.date && S.clash.has(i.date) ? S.clash.get(i.date).filter(o => o.id !== i.id) : [];
-  show("picker", enquiryHead(i) + (others.length ? "<div class=\"warn\">Clash: " + esc(listAnd(others.map(said))) + " on " + fmt(i.date) + ". With one board we can’t take " + (others.length > 1 ? "them all" : "both") + ".</div>" : "") +
-    "<h3 class=\"pk-q\">Where is this enquiry up to?</h3>" + OPTS.map(o =>
-    "<button class=\"opt wm-card\" type=\"button\" data-do=\"opt\" data-opt=\"" + o[0] + "\" data-fid=\"o-" + o[0] + "\" aria-pressed=\"" + (i.status === o[0]) + "\"><i class=\"dot " + o[1] + "\" aria-hidden=\"true\"></i><span class=\"tl\"><span>" + o[0] + "</span><span>" + o[2] + "</span></span>" + (i.status === o[0] ? "<span class=\"chk\" aria-hidden=\"true\">" + CHECK + "</span>" : "") + "</button>").join("") +
-    "<p class=\"err\" id=\"err\" role=\"alert\"></p><button class=\"btn big done\" type=\"button\" data-do=\"close\">Done</button>");
-  dlg.setAttribute("aria-label", "Enquiry status");
-}
-/* If the data changes while the picker is open, it shows the enquiry as it now is, or closes if the enquiry has gone. */
-SHEETS.picker = { sync() { const i = itemOf(picked), said_ = $("#err") ? $("#err").textContent : ""; if (!i) { hide(); return; } keepFocus(() => openPicker(i)); if (said_) $("#err").textContent = said_; } };
-function askDate(i) {
-  picked = i.id;
-  show("date", enquiryHead(i) + "<div class=\"datestep\"><div class=\"fld\"><label for=\"edate\">When is the event?</label><input class=\"inp wm-card\" id=\"edate\" type=\"date\" min=\"" + todayIso() + "\"></div>" +
+function askDate(q) {
+  picked = "q" + q.row;
+  show("date", enquiryHeadOf(q) + "<div class=\"datestep\"><div class=\"fld\"><label for=\"edate\">When is the event?</label><input class=\"inp wm-card\" id=\"edate\" type=\"date\" min=\"" + todayIso() + "\"></div>" +
     "<button class=\"btn big\" type=\"button\" id=\"mk\" data-do=\"make\" disabled>Create the booking</button><button class=\"btn line\" type=\"button\" data-do=\"make\" data-skip>Don’t know yet</button></div>" +
-    "<p class=\"err\" id=\"err\" role=\"alert\"></p><button class=\"linkbtn center\" type=\"button\" data-do=\"item\" data-item=\"" + i.id + "\">Back</button>");
+    "<p class=\"err\" id=\"err\" role=\"alert\"></p><button class=\"linkbtn center\" type=\"button\" data-do=\"item\" data-item=\"" + picked + "\">Back</button>");
   $("#edate").addEventListener("input", e => { $("#mk").disabled = !e.target.value; });
 }
-/** One tap: the calendar and the list change straight away, then it saves. */
-async function setStatus(i, status, eventDate) {
-  if (!i || status === i.status) return;
-  if (status === "Waiting on deposit" && !i.date && eventDate === undefined) { askDate(i); return; }
-  const closes = status === "Waiting on deposit" || status === "Cancelled", date = eventDate || i.date || "";
-  const said_ = $("#err"); if (said_) said_.textContent = "";
-  const saved = save("setEnquiryStatus", { row: i.ref.row, name: i.name, status, eventDate: eventDate || "" }, data => {
-    const q = data.enquiries.find(x => x.row === i.ref.row); if (!q) return;
-    q.status = status; q.what = status === "Waiting on deposit" ? "Moved to bookings" : status === "Cancelled" ? "Cancelled" : "";
-    if (status === "Waiting on deposit") data.bookings.push({ row: -Date.now(), client: i.name, date, status: date ? "Waiting on deposit" : "Date needed", type: i.type, venue: i.venue, suburb: "", cancelled: "", total: 0, received: 0, owing: 0, invoice: "" });
+/**
+ * An enquiry's status, from the keys on its sheet. It shows straight away, then saves. Waiting on deposit makes the booking
+ * (asking for the date first if there is none). Any other change has Undo, back to what it was.
+ */
+async function setEnquiryStatus(q, status, eventDate) {
+  const now = txt(q.status) || "New"; if (status === now) return;
+  const date = parseLoose(q.date);
+  if (status === "Waiting on deposit" && !date && eventDate === undefined) { askDate(q); return; }
+  const closes = status === "Waiting on deposit" || status === "Cancelled", when = eventDate || date || "", row = q.row, name = q.name;
+  const venue = ((/venue:\s*([^\n]+)/i.exec(txt(q.message)) || [])[1] || "").trim(), src = sourceOf(q, true);
+  const slot = $("#err", dlg); if (slot) slot.textContent = "";
+  const saved = save("setEnquiryStatus", { row, name, status, eventDate: eventDate || "" }, data => {
+    const x = data.enquiries.find(r => r.row === row); if (!x) return;
+    x.status = status; x.what = status === "Waiting on deposit" ? "Moved to bookings" : status === "Cancelled" ? "Cancelled" : "";
+    if (status === "Waiting on deposit") data.bookings.push({ row: -Date.now(), client: name, date: when, status: when ? "Waiting on deposit" : "Date needed", type: q.type, venue, suburb: "", cancelled: "", total: 0, received: 0, owing: 0, invoice: "", gotInTouch: src.source, handle: src.handle });
   });
   if (closes) hide();
   const res = await saved;
   if (!res) {
     /* it didn't save: if the sheet closed for it, open it again where it was, with the reason in it (as Add a booking does) */
-    const now = itemOf(i.id);
-    if (closes && now && !dlg.open) {
-      const said = $("#toast").textContent;
-      if (eventDate !== undefined && !i.date) { askDate(now); if (eventDate) { $("#edate").value = eventDate; $("#mk").disabled = false; } } else openPicker(now);
-      $("#err").textContent = said;
+    const back = enquiryAt(row);
+    if (closes && back && !dlg.open) {
+      const said_ = $("#toast").textContent;
+      if (eventDate !== undefined && !date) { askDate(back); if (eventDate) { $("#edate").value = eventDate; $("#mk").disabled = false; } } else openSheet("q" + row);
+      $("#err").textContent = said_;
     }
     return;
   }
-  toast(status === "Waiting on deposit" ? i.name + " is now a booking" + (res.invoice ? ", " + res.invoice : "") + ", waiting on deposit." : status === "Cancelled" ? i.name + "’s enquiry is cancelled." : i.name + ": " + status.toLowerCase() + ".");
+  if (status === "Waiting on deposit") { toast(name + " is now a booking" + (res.invoice ? ", " + res.invoice : "") + ", waiting on deposit."); return; }
+  toast(status === "Cancelled" ? name + "’s enquiry is cancelled." : name + ": " + status.toLowerCase() + ".", async () => {
+    const undone = await save("setEnquiryStatus", { row, name, status: now, eventDate: "" }, data => { const x = data.enquiries.find(r => r.row === row); if (x) { x.status = now; x.what = ""; } });
+    if (undone) toast(name + ": back to " + now.toLowerCase() + ".");
+  });
 }
 
 /* ---------- add a booking (not designed yet: a plain sheet, in the style of the Money sheets) ---------- */
@@ -294,11 +284,11 @@ function control(f) {
   /* only = a box that is only for one package (Custom price): it shows once that package is picked */
   return "<div class=\"fld" + (f.wide ? " wide" : "") + "\"" + (f.only ? " data-only=\"" + esc(f.only) + "\"" + (sameWords(form.values["Package"], f.only) ? "" : " hidden") : "") + ">" + lab + c + hint + "</div>";
 }
-/** values and problem are only given when a save failed, so nothing typed is lost. */
-function openNew(values, problem) {
+/** values: filled in (from an enquiry, or after a save failed, so nothing typed is lost). enquiry = {row, name} when Keen made it. */
+function openNew(values, problem, enquiry) {
   if (!S.data) return;
-  const fields = newFields(); form = { fields, values: values || {} };
-  show("new", "<h2 id=\"dlg-title\" tabindex=\"-1\">add a booking</h2><p class=\"sub\">Goes into the next empty row of the tracker, with the next invoice number.</p>" +
+  const fields = newFields(); form = { fields, values: values || {}, enquiry: enquiry || null };
+  show("new", "<h2 id=\"dlg-title\" tabindex=\"-1\">add a booking</h2><p class=\"sub\">" + (enquiry ? "Filled in from " + esc(enquiry.name) + "’s enquiry, which closes once this saves. " : "") + "Goes into the next empty row of the tracker, with the next invoice number.</p>" +
     "<form id=\"frm\" novalidate><div class=\"fields lp2\" style=\"margin-top:16px\">" + fields.main.map(control).join("") + "</div>" +
     "<h3 class=\"fh\">Extras</h3><div class=\"ticks\">" + fields.ticks.map(control).join("") + "</div>" +
     "<div class=\"fields two\" style=\"margin-top:12px\">" + fields.extras.map(control).join("") + "</div>" +
@@ -313,12 +303,13 @@ dlg.addEventListener("submit", async e => {
   if (!out["Client name"] || !out["Event date"] || !out["Package"]) { $("#err").textContent = "A new booking needs a client name, an event date and a package."; return; }
   if (!sameWords(out["Package"], "Custom")) delete out["Custom price"];          /* a custom price is only for the Custom package */
   hide();
-  const pkg = (S.data.packages || []).find(p => p.name === out["Package"]), total = num(out["Custom price"]) || (pkg && pkg.price) || 0;
-  const res = await save("addBooking", out, data => {
-    data.bookings.push({ row: -Date.now(), client: out["Client name"], date: out["Event date"], status: "Waiting on deposit", type: out["Event type"] || "", venue: out["Venue"] || "", suburb: out["Suburb"] || "", cancelled: "", total, received: 0, owing: total, invoice: "" });
+  const pkg = (S.data.packages || []).find(p => p.name === out["Package"]), total = num(out["Custom price"]) || (pkg && pkg.price) || 0, from = form.enquiry;
+  const res = await save("addBooking", from ? { fields: out, enquiry: from } : out, data => {
+    data.bookings.push({ row: -Date.now(), client: out["Client name"], date: out["Event date"], status: "Waiting on deposit", type: out["Event type"] || "", venue: out["Venue"] || "", suburb: out["Suburb"] || "", cancelled: "", total, received: 0, owing: total, invoice: "", gotInTouch: out["Got in touch by"] || "", handle: out["Handle or number"] || "" });
+    const q = from && data.enquiries.find(x => x.row === from.row); if (q) { q.status = "Waiting on deposit"; q.what = "Moved to bookings"; }
   });
-  if (res) toast("Added " + out["Client name"] + (res.invoice ? " as " + res.invoice : "") + ".");
-  else if (!dlg.open) { const said_ = $("#toast").textContent; openNew(out, said_); }
+  if (res) toast("Added " + out["Client name"] + (res.invoice ? " as " + res.invoice : "") + (from ? ". The enquiry is closed." : "."));
+  else if (!dlg.open) { const said_ = $("#toast").textContent; openNew(out, said_, from); }
 });
 
 /* the Custom price box shows only while the Custom package is picked */
@@ -334,11 +325,73 @@ Object.assign(TAPS, {
   "acc": el => { S.acc = S.acc === el.dataset.acc ? "" : el.dataset.acc; SHEETS.filter.sync(); },
   "tick": el => { S.f[el.dataset.tick] = !S.f[el.dataset.tick]; filterChanged(); },
   "month": el => { const n = S.ym[0] * 12 + S.ym[1] + +el.dataset.by; S.ym = [Math.floor(n / 12), n % 12]; keepFocus(() => { drawCal(); drawList(); }); },
-  "item": el => { const i = itemOf(el.dataset.item); if (i && !i.booking) openPicker(i); },
+  "item": (el, e) => {
+    const sr = el.closest(".srow");
+    if (sr && (sr.dataset.dragged || sr.classList.contains("open"))) { if (!sr.dataset.dragged) setOpen(sr, false); return; }      /* a tap on an open row closes it */
+    const tag = e && e.target && e.target.closest && e.target.closest("[data-src]");
+    if (tag) { openSource(tag.dataset.src); return; }                  /* the tag on a row changes how they got in touch */
+    openSheet(el.dataset.item);
+  },
   "day": el => openDay(el.dataset.day),
-  "day-change": el => { const i = itemOf(el.dataset.item); if (!i) return; if (i.booking) openClient(i.ref.row); else openPicker(i); },
-  "opt": el => setStatus(itemOf(picked), el.dataset.opt),
-  "make": el => setStatus(itemOf(picked), "Waiting on deposit", el.dataset.skip != null ? "" : $("#edate").value),
+  "day-change": el => openSheet(el.dataset.item),
+  "make": el => { const q = whoOf(picked); if (q) setEnquiryStatus(q, "Waiting on deposit", el.dataset.skip != null ? "" : $("#edate").value); },
   "new": () => openNew(),
   "yes": el => { const on = el.getAttribute("aria-pressed") !== "true"; el.setAttribute("aria-pressed", on); if (on) form.values[el.dataset.key] = "Yes"; else delete form.values[el.dataset.key]; }
 });
+
+/* ---------- a row swiped left: quick buttons (phone) ----------
+   It follows the finger 1:1, once the drag is clearly sideways (10 px), so scrolling up and down still works. Let go past
+   half the buttons, or with a quick flick, and it stays open; otherwise it slides back. One row is open at a time: a touch
+   anywhere else, or scrolling, closes it. With reduced motion it opens and closes without sliding. */
+const SWIPE_W = 58;                                         /* px per quick button */
+let swOpen = null, sw = null;
+const reduced = () => matchMedia("(prefers-reduced-motion:reduce)").matches;
+function setOpen(row, open) {
+  if (open && swOpen && swOpen !== row) setOpen(swOpen, false);
+  row.classList.toggle("open", open);
+  const acts = $(".sacts", row); acts.setAttribute("aria-hidden", !open); $$(".sact", row).forEach(b => { b.tabIndex = open ? 0 : -1; });
+  swOpen = open ? row : swOpen === row ? null : swOpen;
+}
+document.addEventListener("touchstart", e => {
+  const row = e.target.closest && e.target.closest(".srow");
+  if (swOpen && swOpen !== row) setOpen(swOpen, false);                 /* a touch anywhere else closes the open row */
+  sw = null;
+  if (!row || !phone() || e.touches.length !== 1 || e.target.closest(".sacts")) return;
+  const t = e.touches[0], w = $$(".sact", row).length * SWIPE_W;
+  sw = { row, x: t.clientX, y: t.clientY, last: t.clientX, at: e.timeStamp, v: 0, w, base: row.classList.contains("open") ? -w : 0, now: 0, on: false, off: false };
+}, { passive: true });
+document.addEventListener("touchmove", e => {
+  if (!sw || sw.off || e.touches.length !== 1) return;
+  const t = e.touches[0], dx = t.clientX - sw.x, dy = t.clientY - sw.y;
+  if (!sw.on) {
+    if (Math.abs(dy) >= 10 && Math.abs(dy) >= Math.abs(dx)) { sw.off = true; return; }      /* up or down: a scroll */
+    if (Math.abs(dx) < 10) return;
+    sw.on = true; sw.row.classList.add("drag");
+  }
+  if (e.cancelable) e.preventDefault();
+  if (e.timeStamp > sw.at) sw.v = (t.clientX - sw.last) / (e.timeStamp - sw.at);
+  sw.last = t.clientX; sw.at = e.timeStamp;
+  let x = sw.base + dx;
+  if (x > 0) x = x / 4; else if (x < -sw.w) x = -sw.w + (x + sw.w) / 4;      /* past either end it resists */
+  sw.now = x; $(".row", sw.row).style.transform = "translateX(" + x + "px)";
+}, { passive: false });
+const swipeEnd = e => {
+  const d = sw; sw = null;
+  if (!d || !d.on) return;
+  const v = e.timeStamp - d.at > 100 ? 0 : d.v, open = v < -0.5 ? true : v > 0.5 ? false : d.now < -d.w / 2;
+  d.row.classList.remove("drag"); $(".row", d.row).style.transform = "";
+  setOpen(d.row, open);
+  d.row.dataset.dragged = "1"; setTimeout(() => { delete d.row.dataset.dragged; }, 350);       /* the tap that ends a drag doesn't open the client */
+};
+document.addEventListener("touchend", swipeEnd); document.addEventListener("touchcancel", swipeEnd);
+addEventListener("scroll", () => { if (swOpen && !sw) setOpen(swOpen, false); }, { passive: true });
+/** The first time Clients opens on a device, one row shows its buttons briefly and slides back, so Sara knows rows swipe. */
+function swipeHint() {
+  if (!phone()) return;
+  let seen = true; try { seen = localStorage.getItem("wmhb2.swipeHint") === "1"; if (!seen) localStorage.setItem("wmhb2.swipeHint", "1"); } catch (e) { seen = true; }
+  if (seen) return;
+  setTimeout(() => {
+    const row = $("#list .srow"); if (!row || swOpen || dlg.open) return;
+    row.classList.add("hint"); setTimeout(() => row.classList.remove("hint"), 1700);
+  }, 700);
+}
