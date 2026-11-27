@@ -377,7 +377,7 @@ function openCancel(row, keep) {
   const b = bookingAt(row); if (!b) { hide(); return; }
   if (!keep || !cx || cx.row !== row) { const base = moneyOf(b).date || todayIso(); cx = { row, mode: "", reason: "", date: "", ym: [+base.slice(0, 4), +base.slice(5, 7) - 1], saving: false }; }
   const f = moneyOf(b), again = sheetKind === "cancel", slotErr = again && $("#err", dlg) ? $("#err", dlg).textContent : "";
-  const opt = (mode, title, words) => "<button class=\"opt cxopt\" type=\"button\" data-do=\"cx-mode\" data-mode=\"" + mode + "\" data-fid=\"cx-" + mode + "\" aria-pressed=\"" + (cx.mode === mode) + "\"><span class=\"tl\"><span>" + title + "</span><span>" + words + "</span></span>" + (cx.mode === mode ? "<span class=\"chk\" aria-hidden=\"true\">" + CHECK + "</span>" : "") + "</button>";
+  const opt = (mode, title, words) => "<button class=\"opt cxopt wm-card\" type=\"button\" data-do=\"cx-mode\" data-mode=\"" + mode + "\" data-fid=\"cx-" + mode + "\" aria-pressed=\"" + (cx.mode === mode) + "\"><span class=\"tl\"><span>" + title + "</span><span>" + words + "</span></span>" + (cx.mode === mode ? "<span class=\"chk\" aria-hidden=\"true\">" + CHECK + "</span>" : "") + "</button>";
   show("cancel", "<h2 id=\"dlg-title\" tabindex=\"-1\" class=\"tight\">cancel or change the date</h2><p class=\"sub\">" + esc([b.client, f.date ? dayOf(f.date) : "No date yet", txt(b.invoice)].filter(Boolean).join(", ")) + "</p>" +
     "<div class=\"cxopts\" role=\"group\" aria-label=\"What to do\">" + opt("cancel", "Cancel the booking", "Works out the refund") + opt("date", "Change the date", "Moves the booking to another day") + "</div>" +
     (cx.mode === "cancel" ? cancelPane(b) : cx.mode === "date" ? datePane(b) : "") +

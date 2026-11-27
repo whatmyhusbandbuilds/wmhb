@@ -1055,7 +1055,6 @@ button.stag::after{content:"";position:absolute;left:-4px;right:-4px;top:-7px;bo
 .refundbox .rv{margin:0;font-size:18px;font-weight:900;letter-spacing:-.02em}
 .cxopts{margin-top:14px}
 .cxopt{min-height:64px}
-.cxopt .tl span+span{color:#F2F3F5}
 .cxfld{margin-top:10px}
 .rlines{border-top:1.5px solid var(--line)}
 .rl{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1.5px solid var(--line);font-size:15px;line-height:1.3}
