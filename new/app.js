@@ -127,16 +127,30 @@ function dateIn(words, near) {
   const y = +near.slice(0, 4), tries = [y - 1, y, y + 1].map(yy => isoOf(yy, mo, +m[1]));
   return tries.sort((a, b) => Math.abs(ms(a) - ms(near)) - Math.abs(ms(b) - ms(near)))[0];
 }
+/** A booking's whole deposit: the tracker's Deposit column, or, until the tracker has one, worked out here. null = it can't be told. */
+const depositFor = (b, T, total) => b.deposit == null ? depositOf(b, T, total) : txt(b.deposit) === "" ? null : num(b.deposit);
+/**
+ * Where a booking is up to, from the hire money alone (never the bond), as the tracker's Status formula has it (version 20):
+ * waiting = less than its deposit in, deposit = the deposit in but not the total, booked = the total in, done = paid in full
+ * and the event day is over. A past event that isn't paid in full keeps its money stage, so it still gets chased.
+ */
+function stageOf(received, deposit, total, date, today) {
+  if (total > 0 && received >= total) return date && date < today ? "done" : "booked";
+  return received > 0 && received >= (deposit || 0) ? "deposit" : "waiting";
+}
+/* The tracker's Status for each stage. */
+const STAGE_STATUS = { waiting: "Waiting on deposit", deposit: "Deposit received", booked: "Booked", done: "Done" };
 /**
  * What the app works out about one booking's money: what is still to pay and by when, and where the bond is at.
- * kind: booked or waiting (on deposit). next: the next amount due. plan: every amount still to come, with its due date.
- * bond: none (this package takes no bond), due, held or back.
+ * stage: waiting, deposit, booked, done (stageOf) or cancelled. deposit: the whole deposit. next: the next amount due.
+ * plan: every amount still to come, with its due date. bond: none (this package takes no bond), due, held or back.
  */
 function moneyOf(b) {
-  const T = S.T || readTerms(null), today = todayIso(), pkg = T.packages[txt(b.pkg)], st = txt(b.status);
+  const T = S.T || readTerms(null), today = todayIso(), pkg = T.packages[txt(b.pkg)];
   const date = /^\d{4}-\d{2}-\d{2}$/.test(txt(b.date)) ? b.date : null;
   const total = num(b.total), received = num(b.received), owing = Math.max(0, num(b.owing));
-  const kind = st === "Booked" || st === "Completed" ? "booked" : st === "Waiting on deposit" ? "waiting" : received > 0 ? "booked" : "waiting";
+  const cancelled = txt(b.cancelled) === "Yes" || txt(b.status) === "Cancelled", whole = depositFor(b, T, total);
+  const stage = cancelled ? "cancelled" : stageOf(received, whole, total, date, today);
   const pays = S.payBy[b.invoice] || [], bondIn = sum(pays.filter(p => p.what === "Bond in")), bondBack = sum(pays.filter(p => p.what === "Bond back"));
   const said = txt(b.bond).toLowerCase();
   const bond = said === "returned" || (bondBack > 0 && bondBack >= bondIn) ? "back" : said === "held" || bondIn > bondBack ? "held" : pkg && pkg.bond ? "due" : "none";
@@ -144,32 +158,30 @@ function moneyOf(b) {
   const dueDays = invNo && T.oldTo && T.oldDays && +invNo[1] <= T.oldTo ? T.oldDays : pkg ? pkg.dueDays : null;
   const balanceDue = date && dueDays != null ? addDays(date, -dueDays) : null;
   const written = dateIn(b.nextStep, date || today);
-  let deposit = depositOf(b, T, total);
-  if (deposit != null) deposit = Math.max(0, Math.min(deposit - received, owing));        /* what is left of the deposit */
-  /* The tracker marks a booking Booked once the smallest deposit (Prices C29) is in, even if its own deposit is bigger.
-     So a Booked booking can still have the rest of its deposit as its next step. */
-  const depositNext = st !== "Completed" && (deposit == null ? kind === "waiting" : deposit > 0);
+  const left = whole == null ? null : Math.max(0, Math.min(whole - received, owing));        /* what is left of the deposit */
+  const depositNext = stage === "waiting";
   /* A deposit is due 48 hours after its invoice is sent. The tracker has no invoice-sent date yet, so it shows with no date. */
-  const next = owing <= 0 ? null : depositNext ? { what: received > 0 ? "Rest of deposit" : "Deposit", amount: deposit, due: written } : { what: "Balance", amount: owing, due: written || balanceDue };
+  const next = owing <= 0 ? null : depositNext ? { what: received > 0 ? "Rest of deposit" : "Deposit", amount: left, due: written } : { what: "Balance", amount: owing, due: written || balanceDue };
   const plan = [];
-  if (owing > 0 && depositNext && deposit) { plan.push({ amount: deposit, due: written || today }); if (owing > deposit) plan.push({ amount: owing - deposit, due: balanceDue || date }); }
+  if (owing > 0 && depositNext && left) { plan.push({ amount: left, due: written || today }); if (owing > left) plan.push({ amount: owing - left, due: balanceDue || date }); }
   else if (owing > 0) plan.push({ amount: owing, due: written || balanceDue || date });
-  return { kind, done: st === "Completed", date, total, received, owing, next, plan, balanceDue, bond, bondAmount: T.bond, bondHeld: bond === "held" ? (bondIn - bondBack > 0 ? bondIn - bondBack : num(T.bond)) : 0 };
+  return { stage, done: stage === "done", past: !!date && date < today, cancelled, date, total, received, owing, deposit: whole, next, plan, balanceDue, bond, bondAmount: T.bond,
+    bondHeld: bond === "held" ? (bondIn - bondBack > 0 ? bondIn - bondBack : num(T.bond)) : 0 };
 }
 const live = b => txt(b.client) && txt(b.status) !== "Cancelled" && txt(b.cancelled) !== "Yes";
 /** The rows of Payments and Expenses that count: a removed row stays in the tracker, marked with the day it was removed. */
 const kept = list => (list || []).filter(x => !x.removed);
 /**
  * After a change on this phone, a booking's money as the tracker's formulas will work it out (it answers a moment later):
- * Received from its Hire payments, Owing, the bond, and its status (Cancelled, then the status set by hand, then the money).
+ * Received from its Hire payments, Owing, the bond, and its status (Cancelled, Date needed, then the money: stageOf).
  */
 function recount(data, invoice) {
   const b = (data.bookings || []).find(x => x.invoice === invoice); if (!b || !invoice) return;
   const pays = kept(data.payments).filter(p => p.invoice === invoice), of = what => sum(pays.filter(p => p.what === what));
   b.received = of("Hire"); b.owing = txt(b.cancelled) === "Yes" ? 0 : Math.max(0, num(b.total) - b.received);
   b.bond = of("Bond back") > 0 ? "Returned" : of("Bond in") > 0 ? "Held" : "";
-  const T = S.T || readTerms(data), auto = !/^\d{4}-\d{2}-\d{2}$/.test(txt(b.date)) ? "Date needed" : b.received < num(T.smallestDeposit) ? "Waiting on deposit" : b.date < todayIso() ? "Completed" : "Booked";
-  b.status = txt(b.cancelled) === "Yes" ? "Cancelled" : txt(b.statusByHand) || auto;
+  const T = S.T || readTerms(data), date = /^\d{4}-\d{2}-\d{2}$/.test(txt(b.date)) ? b.date : null;
+  b.status = txt(b.cancelled) === "Yes" ? "Cancelled" : !date ? "Date needed" : STAGE_STATUS[stageOf(b.received, depositFor(b, T, num(b.total)), num(b.total), date, todayIso())];
   data.reports = null;                     /* the tracker's own totals are out of date until it answers */
 }
 
@@ -343,18 +355,51 @@ function stamp() {
 
 /* ---------- sheets: one <dialog>, a bottom sheet on the phone and a centred box on a laptop ---------- */
 const dlg = $("#dlg");
-const SHEETS = {};                    /* a sheet may add { sync() } here, to keep itself up to date while it is open */
-let sheetKind = "";
+/* A sheet may add itself here: { sync() } keeps it up to date while it is open; dirty() says it holds changes that differ from
+   how it opened (then closing it asks first); reopen() draws it again, with what it holds, if it was closed anyway. */
+const SHEETS = {};
+let sheetKind = "", closing = false, discarding = false;
 const GRAB = "<div class=\"grab\" aria-hidden=\"true\"></div>";
 function show(kind, html, cls) {
+  if (kind !== sheetKind) discarding = false;
   sheetKind = kind; dlg.className = "wm-sheet" + (cls ? " " + cls : "") + (dlg.open && dlg.classList.contains("held") ? " held" : "");
-  const t = $("#toast"); if (t.parentNode === dlg) $("#app").appendChild(t);              /* the message survives the sheet being drawn again */
   dlg.innerHTML = GRAB + html;      /* a sheet that has been swiped and sprung back doesn't slide in again when it is redrawn */
+  if (discarding) askDiscard();
   if (!dlg.open) { lockPage(); dlg.showModal(); dlg.scrollTop = 0; }
-  placeToast();
 }
-function hide() { if (dlg.open) { const t = $("#toast"); if (t.parentNode === dlg) $("#app").appendChild(t); dlg.close(); unlockPage(); placeToast(); } }        /* the page is let go at once: what is tapped next may scroll it */
-dlg.addEventListener("close", () => { const t = $("#toast"); if (t.parentNode === dlg) { $("#app").appendChild(t); placeToast(true); } sheetKind = ""; dlg.innerHTML = ""; dlg.removeAttribute("style"); unlockPage(); });   /* Escape closes it without hide(); a message showing in it moves to the page */
+/** Closes the sheet straight away, dropping anything it holds. */
+function hide() { if (dlg.open) { closing = true; dlg.close(); unlockPage(); } }        /* the page is let go at once: what is tapped next may scroll it */
+dlg.addEventListener("close", () => {
+  const kind = sheetKind, sheet = SHEETS[kind], lost = !closing && !!(sheet && sheet.dirty && sheet.dirty() && sheet.reopen);
+  closing = false; discarding = false; sheetKind = ""; dlg.innerHTML = ""; dlg.removeAttribute("style"); unlockPage();
+  if (lost) { sheet.reopen(); askDiscard(); return; }          /* closed by the browser while it held changes: back, asking first */
+  if (heldToast) { const m = heldToast; heldToast = ""; toast(m); }
+});
+/* ---------- a sheet that holds its changes until Confirm (version 20) ----------
+   Every way of closing it (its Cancel, a tap on the dark layer, Escape, the back gesture, a swipe down) asks "Discard changes?"
+   first, but only while what it holds still differs from how it opened. */
+const isDirty = () => { const sheet = dlg.open && SHEETS[sheetKind]; return !!(sheet && sheet.dirty && sheet.dirty()); };
+/** Closes the sheet the way a person does: if it holds changes, it asks first. */
+function closeSheet() { if (isDirty()) askDiscard(); else hide(); }
+/**
+ * The pinned bottom of a sheet: what was saved (or went wrong), then its buttons. The "Discard changes?" question takes its
+ * place while it is asked. main = the buttons.
+ */
+const sheetFoot = (main, said, wrong) => "<div class=\"sfoot\" id=\"sfoot\"><p class=\"said\" id=\"said\" role=\"status\">" + esc(said || "") + "</p><p class=\"err\" id=\"err\" role=\"alert\">" + esc(wrong || "") + "</p>" +
+  "<div class=\"sfmain\">" + main + "</div><div class=\"sfask\" role=\"group\" aria-labelledby=\"sfq\"><p class=\"sfq\" id=\"sfq\">Discard changes?</p><div class=\"sfbtns\">" +
+  "<button class=\"btn line\" type=\"button\" data-do=\"discard\" data-fid=\"discard\">Discard</button><button class=\"btn big\" type=\"button\" data-do=\"keep-editing\" data-fid=\"keep-editing\">Keep editing</button></div></div></div>";
+function askDiscard() {
+  const foot = $("#sfoot", dlg); if (!foot) { hide(); return; }
+  discarding = true; foot.classList.add("asking");
+  const keep = $("[data-do=keep-editing]", foot); if (keep && !foot.contains(document.activeElement)) keep.focus({ preventScroll: true });
+}
+function keepEditing() {
+  discarding = false; const foot = $("#sfoot", dlg); if (!foot) return;
+  foot.classList.remove("asking");
+  const main = $(".sfmain button", foot); if (main) main.focus({ preventScroll: true });
+}
+/* Escape, and the back gesture on Android: the sheet asks first if it holds changes */
+dlg.addEventListener("cancel", e => { if (isDirty()) { e.preventDefault(); askDiscard(); } });
 /* While a sheet is open the page behind it never moves: it is held where it was, and put back exactly there when the sheet
    closes. (The sheet's own scrolling stays inside it: overscroll-behavior in app.css.) */
 let pageAt = null;
@@ -404,8 +449,9 @@ const dragEnd = e => {
   const was = drag.on; drag.on = false; drag.armed = false; drag.outside = false;
   if (!was || !dlg.open) return;
   const v = e.timeStamp - drag.at > 100 ? 0 : drag.v;                  /* the finger stopped before it let go: no flick */
-  if (drag.dy > drag.h * 0.25 || (v > 0.5 && drag.dy > 10)) closeSheetDown(v);
-  else { dlg.style.transition = matchMedia("(prefers-reduced-motion:reduce)").matches ? "none" : "transform 380ms cubic-bezier(.32,.72,0,1)"; dlg.style.transform = "translateY(0)"; }      /* back up */
+  const away = drag.dy > drag.h * 0.25 || (v > 0.5 && drag.dy > 10);
+  if (away && !isDirty()) closeSheetDown(v);
+  else { if (away) askDiscard(); dlg.style.transition = matchMedia("(prefers-reduced-motion:reduce)").matches ? "none" : "transform 380ms cubic-bezier(.32,.72,0,1)"; dlg.style.transform = "translateY(0)"; }      /* back up */
 };
 dlg.addEventListener("touchend", dragEnd); dlg.addEventListener("touchcancel", dragEnd);
 /** Slides an open sheet off the bottom, the way it came in, at the finger's speed (px per ms), then closes it. */
@@ -510,47 +556,41 @@ async function saveLatest(key, fn, arg, value, get, set) {
 }
 
 /* ---------- messages ---------- */
-let toastTimer, toastUndo = null;
+let toastTimer, heldToast = "";
 /**
- * A message at the bottom. undo = what Undo does: then the message has an Undo button and stays about 8 seconds.
- * While a sheet is open the message sits inside it, because everything outside an open sheet can't be tapped.
+ * A message at the bottom of the page, for about 5 seconds. While a sheet is open nothing may cover its buttons, so the
+ * message goes in the sheet's own line above them instead; a sheet without one shows it once it closes.
  */
-function toast(msg, undo) {
-  const t = $("#toast"); toastUndo = undo || null;
-  t.innerHTML = "<span>" + esc(msg) + "</span>" + (undo ? "<button class=\"tundo\" type=\"button\" data-do=\"undo\" data-fid=\"undo\">Undo</button>" : "");
-  t.classList.toggle("hasundo", !!undo);
-  placeToast(true);
+function toast(msg) {
+  if (dlg.open) { const slot = $("#said", dlg); if (slot) { slot.textContent = msg; const err = $("#err", dlg); if (err) err.textContent = ""; } else heldToast = msg; return; }
+  const t = $("#toast");
+  t.innerHTML = "<span>" + esc(msg) + "</span>";
+  try { if (t.showPopover) { if (t.matches(":popover-open")) t.hidePopover(); t.showPopover(); } } catch (e) {}
   requestAnimationFrame(() => t.classList.add("on"));
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(hideToast, undo ? 8000 : 5000);
+  toastTimer = setTimeout(hideToast, 5000);
 }
 function hideToast() {
-  const t = $("#toast"); toastUndo = null; t.classList.remove("on", "hasundo");
+  const t = $("#toast"); t.classList.remove("on");
   setTimeout(() => { try { if (!t.classList.contains("on") && t.matches(":popover-open")) t.hidePopover(); } catch (e) {} }, 250);
 }
-/** Puts the message where it can be tapped: in the open sheet, or on the page. again = show it (again) where it now is. */
-function placeToast(again) {
-  const t = $("#toast"), home = dlg.open ? dlg : $("#app"), was = t.classList.contains("on");
-  if (t.parentNode !== home) home.appendChild(t);           /* moving it closes it, so it opens again below */
-  if (!again && !was) return;
-  try { if (t.showPopover) { if (t.matches(":popover-open")) t.hidePopover(); t.showPopover(); } } catch (e) {}
-}
 /** A message about a save: inside the open sheet if it has room for one, otherwise as a toast. */
-function say(msg) { const slot = dlg.open && $("#err", dlg); if (slot) slot.textContent = msg; else toast(msg); }
+function say(msg) { const slot = dlg.open && $("#err", dlg); if (slot) { slot.textContent = msg; const ok = $("#said", dlg); if (ok) ok.textContent = ""; } else toast(msg); }
 
 /* ---------- taps ---------- */
 const TAPS = {
   "tab": el => { const screen = SCREENS[el.dataset.tab]; if (screen && screen.reset) screen.reset(); S.backTo = null; go(el.dataset.tab); if (menuOpen()) menu(false); },      /* a tab chosen from the menu forgets any way back */
   "menu-open": () => menu(true),
   "menu-close": () => menu(false),
-  "close": () => hide(),
-  "undo": () => { const u = toastUndo; hideToast(); if (u) u(); },
+  "close": () => closeSheet(),
+  "discard": () => hide(),
+  "keep-editing": () => keepEditing(),
   "refresh": () => { if (!S.data) { S.trouble = ""; go(S.tab); } load(true); }
 };
 document.addEventListener("click", e => {
   if (e.target === dlg) {                /* a tap on the dark layer around the sheet closes it */
     const r = dlg.getBoundingClientRect();
-    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) hide();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) closeSheet();
     return;
   }
   const el = e.target.closest("[data-do]");

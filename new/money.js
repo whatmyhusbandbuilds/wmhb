@@ -71,10 +71,12 @@ function drawTop(M) {
 }
 
 /* ---------- clients: coming up, and completed ---------- */
+/* Where a client is up to, in its status colour (version 20). A past event that isn't paid in full keeps its money status. */
 function statusPill(f) {
-  if (f.done) return "<span class=\"pill2 over\">Completed (" + (f.owing > 0 ? money(f.owing) + " to pay" : "paid") + ")</span>";
-  if (f.kind === "waiting") return "<span class=\"pill2 waiting\">Waiting on deposit</span>";
-  return "<span class=\"pill2\">Booked (" + (f.owing > 0 ? money(f.owing) + " to pay" : "paid") + ")</span>";
+  if (f.stage === "done") return "<span class=\"pill2 over\">Done</span>";
+  if (f.stage === "waiting") return "<span class=\"pill2 waiting\">Waiting on deposit</span>";
+  if (f.stage === "deposit") return "<span class=\"pill2 deposit\">Deposit received (" + money(f.owing) + " to pay)</span>";
+  return "<span class=\"pill2\">Booked (paid)</span>";
 }
 const nextLine = f => f.next ? "Next: " + f.next.what + (f.next.amount != null ? " " + money(f.next.amount) : "") + (f.next.due ? " due " + fmt(f.next.due) : "") : "";
 const bondLine = f => f.bond === "none" ? "No bond" : f.bond === "back" ? "Bond: given back" : f.bond === "held" ? "Bond: holding " + money(f.bondHeld) : "Bond: not paid yet";
@@ -96,7 +98,7 @@ function drawMoneyClients(M, grow) {
     return "<div class=\"msec\"><button class=\"acch\" type=\"button\" data-do=\"msec\" data-sec=\"" + id + "\" data-fid=\"ms-" + id + "\" aria-expanded=\"" + open + "\"><span class=\"t\"><span>" + title + "</span><span>" + line + "</span></span>" + PLUS + "</button>" +
       "<div class=\"coll" + (open ? " open" : "") + "\" id=\"ms-" + id + "\"><div><div class=\"mcards\">" + list.map(x => clientCard(x, grow && open)).join("") + "</div></div></div></div>";
   };
-  $("#m-clients").innerHTML = sec("coming", "Coming up", shown.filter(x => !x.f.done)) + sec("done", "Completed", shown.filter(x => x.f.done));
+  $("#m-clients").innerHTML = sec("coming", "Coming up", shown.filter(x => !x.f.past)) + sec("done", "Completed", shown.filter(x => x.f.past));      /* by the event date: a past one not paid in full shows what is still to pay */
 }
 
 /* ---------- expenses ---------- */
@@ -131,9 +133,20 @@ function drawBonds(M) {
     list.map(x => { const st = bondState(x.f); return "<button class=\"brow\" type=\"button\" data-do=\"client\" data-row=\"" + x.b.row + "\" data-fid=\"br-" + x.b.row + "\" aria-haspopup=\"dialog\"><i class=\"" + st[0] + "\" aria-hidden=\"true\"></i><span class=\"t\"><span>" + esc(x.b.client) + "</span><span class=\"" + st[0] + "\">" + esc(st[1]) + "</span></span><span class=\"inv\">" + esc(x.b.invoice) + "</span></button>"; }).join("") + "</div>";
 }
 
+/** Marks rows of Payments or Expenses removed (Remove in the list of expenses, once it is confirmed). done = the message once it is saved. */
+async function removeEntries(entries, done) {
+  const res = await save("removeEntries", { entries }, data => {
+    entries.forEach(e => { const x = (e.tab === "Payments" ? data.payments : data.expenses).find(r => r.row === e.row); if (x) x.removed = todayIso(); });
+    entries.forEach(e => { if (e.invoice) recount(data, e.invoice); });
+    data.reports = null;
+  });
+  if (res) toast(done);
+  return !!res;
+}
+
 /* ---------- add an expense ---------- */
 let cost = null;
-const comingUp = () => (S.data.bookings || []).filter(live).map(b => ({ b, f: moneyOf(b) })).filter(x => !x.f.done && txt(x.b.invoice)).sort(byDate);
+const comingUp = () => (S.data.bookings || []).filter(live).map(b => ({ b, f: moneyOf(b) })).filter(x => !x.f.past && txt(x.b.invoice)).sort(byDate);
 const chips = (group, list, picked) => "<div class=\"chips\">" + list.map(x => "<button class=\"chip\" type=\"button\" data-do=\"cost-pick\" data-group=\"" + group + "\" data-value=\"" + esc(x[0]) + "\" aria-pressed=\"" + (picked === x[0]) + "\">" + esc(x[1]) + "</button>").join("") + "</div>";
 /** values and problem are only given when a save failed, so nothing typed is lost. */
 function openCost(values, problem) {
@@ -159,10 +172,7 @@ dlg.addEventListener("submit", async e => {
     data.expenses.push({ row: -Date.now(), date: todayIso(), what, type: out.type, amount, invoice: out.invoice, client: b ? b.client : "", notes: "", removed: "" });
     data.reports = null;
   });
-  if (res) {
-    const entries = (res.rows || []).map(row => ({ tab: "Expenses", row, amount, invoice: out.invoice || "", what }));
-    toast("Saved: " + what + ", " + money(amount) + ".", entries.length ? () => removeEntries(entries, "Undone: " + what + " taken off.") : null);
-  }
+  if (res) toast("Saved: " + what + ", " + money(amount) + ".");
   else if (!dlg.open) openCost(kept, $("#toast").textContent);
 });
 
@@ -186,7 +196,7 @@ Object.assign(TAPS, {
   "x-yes": el => {
     const x = (S.data.expenses || []).find(r => r.row === +el.dataset.row); S.xask = 0; if (!x) return;
     const entry = { tab: "Expenses", row: x.row, amount: x.amount, invoice: x.invoice || "", what: x.what }, words = x.what + ", " + money(num(x.amount));
-    removeEntries([entry], "Removed: " + words + ".", false, () => removeEntries([entry], "Put back: " + words + ".", true));
+    removeEntries([entry], "Removed: " + words + ".");
   },
   "cost-pick": el => {
     const group = el.dataset.group, value = el.dataset.value;
