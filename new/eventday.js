@@ -1,7 +1,8 @@
 "use strict";
 /* wmhb app: the Event day screen, a checklist for the day: one card for every event coming up, with the details (contact
    details for emergencies), what is ready, and the packing list. Four ready items go green by themselves from what the app
-   knows (the money, the designs, the start time); every item opens a sheet saying why it is green, or what is missing. */
+   knows (the money, the designs, the start time); every item opens a sheet saying why it is green, or what is missing.
+   A tick on that sheet is held until Confirm, as on the client sheet (version 20). */
 
 Object.assign(S, { eopen: {}, popen: {} });        /* which cards, and which packing lists, are open */
 /* The packing list comes from the back end. This copy is only used if it sends none. */
@@ -23,7 +24,7 @@ const sayClock = hhmm => { const p = hhmm.split(":").map(Number); return (p[0] %
 const timeShown = shown => { const c = clockOf(shown); return c ? sayClock(c) : txt(shown); };
 
 /* ---------- what a card shows ---------- */
-const comingEvents = () => (S.data.bookings || []).filter(live).map(b => ({ b, f: moneyOf(b) })).filter(x => !x.f.done)
+const comingEvents = () => (S.data.bookings || []).filter(live).map(b => ({ b, f: moneyOf(b) })).filter(x => !x.f.past)       /* today and later, and no date yet */
   .sort((a, b) => (a.f.date || "9") < (b.f.date || "9") ? -1 : (a.f.date || "9") > (b.f.date || "9") ? 1 : a.b.row - b.b.row);
 function daysAway(iso) {
   if (!iso) return "No date yet";
@@ -47,10 +48,11 @@ function autoOf(key, x) {
   if (key === "start") return !!txt(e.startTime);
   return false;
 }
-/** The seven things to have ready, in order: green when the app knows it is done, or when it was ticked by hand. */
+/** The seven things to have ready, in order: green when the app knows it is done, or when it was ticked by hand.
+    Bond paid has no tick by hand: it follows the bond tick on the client sheet (version 20). */
 function readyOf(x) {
   return Object.keys(TICKS).map(key => {
-    const t = TICKS[key], hand = handOf((x.b[t[1]] || {})[t[2]]), auto = autoOf(key, x);
+    const t = TICKS[key], hand = key === "bond" ? "" : handOf((x.b[t[1]] || {})[t[2]]), auto = autoOf(key, x);
     return { key, label: t[0], from: key === "bond" && x.f.bond === "none" ? "No bond needed" : "", auto, hand, done: auto || !!hand };
   });
 }
@@ -149,7 +151,7 @@ function setEventField(row, field, where, name, value, shown) {
 }
 
 /* ---------- why an item is green, or what is missing (not designed: plain, like the Money sheets) ---------- */
-let whyFor = null;                         /* {row, key} */
+let whyFor = null;                         /* {row, key, hand: the tick held until Confirm (null: not touched), bond: the bond tick held, saving} */
 const day_ = iso => iso && iso !== "yes" ? dParts(iso).d + " " + dParts(iso).mo : "";
 /** The facts behind one of the seven, as sentences. */
 function whyFacts(key, x, r) {
@@ -171,34 +173,68 @@ function whyFacts(key, x, r) {
     out.push(txt(e.startTime) ? "Start time: " + timeShown(e.startTime) + "." : "No start time yet.");
   }
   if (r.hand) out.push(r.hand === "yes" ? "Ticked by hand." : "Ticked by hand on " + day_(r.hand) + ".");
-  else if (!r.auto) out.push(r.key === "fee" || r.key === "bond" || r.key === "design" || r.key === "start" ? "Not ticked by hand." : "Not ticked yet.");
+  else if (!r.auto && key !== "bond") out.push(r.key === "fee" || r.key === "design" || r.key === "start" ? "Not ticked by hand." : "Not ticked yet.");
   return out;
 }
 /* Where each one is changed: [words, tap, more] */
 const WHY_LINK = { fee: ["Open the client", "ev-client"], bond: ["Open the client", "ev-client"], design: ["Open in Designs", "dz-peek-open"], start: ["Set the start time", "ev-set", " data-what=\"start\""] };
-function openWhy(row, key) {
+function openWhy(row, key, keep, said) {
   const b = eventAt(row); if (!b) { hide(); return; }
-  const x = { b, f: moneyOf(b) }, r = readyOf(x).find(y => y.key === key), link = WHY_LINK[key], knows = !!link;
-  whyFor = { row, key };
-  /* a tick by hand: always there for the three only Aadil knows; for the four the app knows, only while the app can't tell */
-  const hand = r.hand ? "<button class=\"btn line\" type=\"button\" data-do=\"ev-hand\" data-on=\"\" data-fid=\"ev-hand\">Untick</button>"
-    : !r.auto ? "<button class=\"k k-dark wide mt12\" type=\"button\" data-do=\"ev-hand\" data-on=\"1\" data-fid=\"ev-hand\">" + (knows ? "Tick by hand" : "Tick") + "</button>" : "";
+  if (!keep || !whyFor || whyFor.row !== row || whyFor.key !== key) whyFor = { row, key, hand: null, bond: null, saving: false };
+  const x = { b, f: moneyOf(b) }, r = readyOf(x).find(y => y.key === key), link = WHY_LINK[key], knows = !!link, w = whyFor;
+  const again = sheetKind === "why", slotSaid = again && $("#said", dlg) ? $("#said", dlg).textContent : "", slotErr = again && $("#err", dlg) ? $("#err", dlg).textContent : "";
+  /* Bond paid: the client sheet's bond tick. The others: a tick by hand, always there for the three only Aadil knows, and for
+     the four the app knows only while the app can't tell. Either is held until Confirm. */
+  let tick = "";
+  if (key === "bond") tick = x.f.bond === "none" ? "" : bondTick(b, w.bond == null ? !!(bondState_(b) || {}).was : w.bond, "ev-bond", "ev-bond");
+  else if (r.hand || !r.auto) { const on = w.hand == null ? !!r.hand : w.hand; tick = "<button class=\"tickf whytick" + (on ? " on" : "") + "\" type=\"button\" data-do=\"ev-hand\" data-fid=\"ev-hand\" aria-pressed=\"" + on + "\"><span class=\"box\" aria-hidden=\"true\">" + CHECK + "</span>" + (knows ? "Ticked by hand" : "Ticked") + "</button>"; }
   show("why", "<h2 id=\"dlg-title\" tabindex=\"-1\" class=\"tight\">" + esc(r.label.toLowerCase()) + "</h2><p class=\"sub\">" + esc([b.client, x.f.date ? dayOf(x.f.date) : ""].filter(Boolean).join(", ")) + "</p>" +
     "<p class=\"whyst " + (r.done ? "on" : "off") + "\"><span class=\"box\" aria-hidden=\"true\">" + (r.done ? "<span class=\"ck\">" + CHECK + "</span>" : "") + "</span>" + (r.done ? "Ready" : "Not ready yet") + "</p>" +
     "<ul class=\"whyfacts\">" + whyFacts(key, x, r).map(t => "<li>" + esc(t) + "</li>").join("") + "</ul>" +
-    (key === "design" ? pickedHtml(b) : "") + hand +
+    (key === "design" ? pickedHtml(b) : "") + (tick ? "<div class=\"whytk\">" + tick + "</div>" : "") +
     (link ? "<button class=\"k k-dark wide mt12\" type=\"button\" data-do=\"" + link[1] + "\" data-row=\"" + row + "\"" + (link[2] || "") + " data-fid=\"ev-link\">" + link[0] + "</button>" : "") +
-    "<p class=\"err\" id=\"err\" role=\"alert\"></p><button class=\"btn big done\" type=\"button\" data-do=\"close\">Done</button>");
+    sheetFoot("<button class=\"btn big confirm\" type=\"button\" data-do=\"ev-confirm\" data-fid=\"ev-confirm\"" + (w.saving ? " disabled" : "") + ">" + (w.saving ? "Saving…" : "Confirm") + "</button>", said || slotSaid, said ? "" : slotErr));
   dlg.setAttribute("aria-label", r.label);
   if (key === "design") pickedPictures(b, "why");
 }
-SHEETS.why = { sync() { if (whyFor) keepFocus(() => openWhy(whyFor.row, whyFor.key)); } };
-/** A tick by hand (the day it was ticked) or taking one away. Undo puts back what was there. */
-async function handTick(row, key, on) {
-  const b = eventAt(row), t = TICKS[key]; if (!b) return;
-  const was = txt((b[t[1]] || {})[t[2]]), value = on ? todayIso() : "";
-  const done = await setEventField(row, t[0], t[1], t[2], value, value);
-  if (done) toast(t[0] + (on ? ": ticked by hand." : ": unticked."), () => setEventField(row, t[0], t[1], t[2], was, was).then(ok => { if (ok) toast(t[0] + ": put back."); }));
+/** What the why sheet holds that differs from the tracker: {hand: the new tick by hand, bond: bondChanges}, or null. */
+function whyChanges() {
+  const w = whyFor, b = w && eventAt(w.row); if (!b || w.saving) return null;
+  const r = readyOf({ b, f: moneyOf(b) }).find(y => y.key === w.key), out = {};
+  if (w.hand != null && w.hand !== !!r.hand) out.hand = w.hand;
+  const bond = w.key === "bond" && w.bond != null ? bondChanges(b, w.bond) : null;
+  if (bond) out.bond = bond;
+  return "hand" in out || out.bond ? out : null;
+}
+SHEETS.why = {
+  sync() { if (whyFor) keepFocus(() => openWhy(whyFor.row, whyFor.key, true)); },
+  dirty: () => !!whyChanges(),
+  reopen() { if (whyFor && eventAt(whyFor.row)) openWhy(whyFor.row, whyFor.key, true); }
+};
+/** Confirm on the why sheet: the tick by hand (the day it was ticked, or taken away), or the bond, in one save. */
+async function confirmWhy() {
+  const w = whyFor, b = w && eventAt(w.row); if (!b || w.saving) return;
+  const ch = whyChanges(); if (!ch) { hide(); return; }
+  const t = TICKS[w.key], row = w.row, key = w.key;
+  w.saving = true; SHEETS.why.sync();
+  let ok;
+  if (ch.bond) {
+    const arg = { kind: "booking", row, id: b.id, invoice: b.invoice };
+    if (ch.bond.payments.length) arg.payments = ch.bond.payments;
+    if (ch.bond.remove.length) arg.remove = ch.bond.remove;
+    ok = !!(await save("saveClient", arg, data => {
+      ch.bond.payments.forEach((p, i) => data.payments.push({ row: -(Date.now() + i), date: todayIso(), invoice: b.invoice, client: b.client, amount: p.amount, what: p.what, note: "", removed: "" }));
+      ch.bond.remove.forEach(e => { const r = data.payments.find(y => y.row === e.row); if (r) r.removed = todayIso(); });
+      recount(data, b.invoice);
+    }));
+  } else {
+    const value = ch.hand ? todayIso() : "";
+    ok = await setEventField(row, t[0], t[1], t[2], value, value);
+  }
+  if (!whyFor || whyFor.row !== row || whyFor.key !== key) return;
+  whyFor.saving = false;
+  if (ok) { whyFor.hand = null; whyFor.bond = null; }
+  if (sheetKind === "why") openWhy(row, key, true, ok ? "Saved: " + (ch.bond ? ch.bond.words : t[0].toLowerCase() + (ch.hand ? " ticked" : " unticked")) + "." : "");
 }
 
 /* ---------- the small sheets: arrive time, start time, who is running it (not designed yet: plain, like the Money sheets) ---------- */
@@ -238,7 +274,17 @@ Object.assign(TAPS, {
   "ev-open": el => { const row = +el.dataset.row; openClose(el, $("#ev-" + row), S.eopen[row] = !S.eopen[row]); },
   "ev-pack": el => { const row = +el.dataset.row; openClose(el, $("#ep-" + row), S.popen[row] = !S.popen[row]); },
   "ev-why": el => openWhy(+el.dataset.row, el.dataset.key),
-  "ev-hand": el => { if (whyFor) handTick(whyFor.row, whyFor.key, !!el.dataset.on); },
+  "ev-hand": el => {
+    const b = whyFor && eventAt(whyFor.row); if (!b || whyFor.saving) return;
+    const r = readyOf({ b, f: moneyOf(b) }).find(y => y.key === whyFor.key), on = el.getAttribute("aria-pressed") !== "true";
+    whyFor.hand = on === !!r.hand ? null : on; SHEETS.why.sync();
+  },
+  "ev-bond": () => {
+    const b = whyFor && eventAt(whyFor.row), st = b && bondState_(b); if (!st || st.none || whyFor.saving) return;
+    const on = !(whyFor.bond == null ? !!st.was : whyFor.bond);
+    whyFor.bond = on === !!st.was ? null : on; SHEETS.why.sync();
+  },
+  "ev-confirm": () => confirmWhy(),
   "ev-client": el => openClient(+el.dataset.row),
   "ev-item": el => {
     const row = +el.dataset.row, b = eventAt(row); if (!b) return;

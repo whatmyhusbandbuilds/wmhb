@@ -1,6 +1,7 @@
 "use strict";
-/* wmhb app: the Clients screen, the hub: every change for a client starts here. The calendar, the list (a row swipes left
-   for quick buttons on a phone), the filter, and "Add a booking". A client opens their sheet (client.js) from anywhere. */
+/* wmhb app: the Clients screen, the hub: every change for a client starts here. The calendar, the list (a booking's row
+   swipes left for Board, Screen and Cancel on a phone; on a laptop they show beside it), the filter, and "Add a booking".
+   A client opens their sheet (client.js) from anywhere. */
 
 /* Enquiry dates are typed by clients: "5 December 2026", "January 2027", or nothing. */
 function parseLoose(t) {
@@ -23,25 +24,27 @@ function groupOf(type) {
 }
 
 /* ---------- the data ---------- */
+/* The filter's three groups. Booked takes in every booking with its deposit in: Deposit received, Booked and Done. */
 const STATUS_KEYS = [["booked", "Booked", "Deposit in. Paid, or balance to pay"], ["waiting", "Waiting on deposit", "Invoice sent, deposit not in yet"], ["enquiry", "Enquiry", "New, or waiting on their reply"]];
+/* How urgent each stage is, for a day with more than one booking: red over yellow over green, then grey. */
+const URGENT = { waiting: 0, deposit: 1, booked: 2, done: 3 };
 const TYPE_KEYS = ["Celebrations", "Weddings", "Corporate", "Markets"];
-Object.assign(S, { ym: null, f: {}, acc: "status", items: [], clash: new Map(), toAnswer: 0, toChase: 0 });
+Object.assign(S, { ym: null, f: {}, acc: "status", items: [], refunds: [], clash: new Map(), toAnswer: 0, toChase: 0 });
 STATUS_KEYS.forEach(k => S.f[k[0]] = true); TYPE_KEYS.forEach(k => S.f[k] = true);
 { const t = todayIso(); S.ym = [+t.slice(0, 4), +t.slice(5, 7) - 1]; }
 
 /** Turns what the tracker sent into the items the calendar and the list show, and counts the menu badges. */
 function build(data) {
-  const items = [], today = todayIso(); let toChase = 0, toAnswer = 0;
+  const items = [], refunds = [], today = todayIso(); let toChase = 0, toAnswer = 0;
   for (const b of data.bookings || []) {
-    const name = txt(b.client), st = txt(b.status); if (!name) continue;
-    if (st === "Cancelled" || txt(b.cancelled) === "Yes") continue;
-    const owing = Math.max(0, num(b.owing)), received = num(b.received);
-    /* Booked = deposit in. Waiting on deposit = invoice sent, deposit not in. Both come from the tracker's Status column.
-       A completed booking keeps the Booked look. */
-    const kind = st === "Booked" || st === "Completed" ? "booked" : st === "Waiting on deposit" ? "waiting" : received > 0 ? "booked" : "waiting";
+    const name = txt(b.client); if (!name) continue;
+    const f = moneyOf(b), date = f.date;
+    /* a cancelled booking is off the calendar; it stays at the bottom of the list while its refund is still to send */
+    if (f.cancelled) { if (num(b.refund) > 0 && !txt(b.refundSent)) refunds.push({ id: "b" + b.row, name, refund: num(b.refund), ref: b }); continue; }
+    /* the stage follows the hire money (moneyOf): waiting (red), deposit received (yellow), booked (green), done (grey) */
+    const kind = f.stage, owing = f.owing;
     if (kind === "waiting" || owing > 0) toChase++;
-    const date = /^\d{4}-\d{2}-\d{2}$/.test(txt(b.date)) ? b.date : null;
-    items.push({ id: "b" + b.row, booking: true, kind, live: !date || date >= today, name, short: calendarName(name), date, dateText: "",
+    items.push({ id: "b" + b.row, booking: true, kind, fkey: kind === "waiting" ? "waiting" : "booked", live: !date || date >= today, name, short: calendarName(name), date, dateText: "",
       type: txt(b.type), group: groupOf(b.type), venue: [txt(b.venue), txt(b.suburb)].filter(Boolean).join(", "), contact: "", owing, ref: b });
   }
   for (const q of data.enquiries || []) {
@@ -49,32 +52,33 @@ function build(data) {
     if (st !== "New" && st !== "Waiting on response") continue;
     if (st === "New") toAnswer++;
     const venue = (/venue:\s*([^\n]+)/i.exec(txt(q.message)) || [])[1] || "";
-    items.push({ id: "q" + q.row, booking: false, kind: "enquiry", live: true, status: st, name, short: calendarName(name), date: parseLoose(q.date), dateText: txt(q.date),
+    items.push({ id: "q" + q.row, booking: false, kind: "enquiry", fkey: "enquiry", live: true, status: st, name, short: calendarName(name), date: parseLoose(q.date), dateText: txt(q.date),
       type: txt(q.type), group: groupOf(q.type), venue: venue.trim(), contact: txt(q.contact), owing: 0, ref: q });
   }
-  const rank = { booked: 0, waiting: 1, enquiry: 2 };
+  const rank = { booked: 0, done: 0, deposit: 1, waiting: 2, enquiry: 3 };
   items.sort((a, b) => (a.date || "9") < (b.date || "9") ? -1 : (a.date || "9") > (b.date || "9") ? 1 : rank[a.kind] - rank[b.kind]);
   /* Clash rule: more than one live item on a date. There is only one board. */
   const by = new Map();
   items.forEach(i => { if (i.date && i.live) by.set(i.date, (by.get(i.date) || []).concat(i)); });
   S.clash = new Map([...by].filter(e => e[1].length > 1));
-  S.items = items; S.toAnswer = toAnswer; S.toChase = toChase;
+  S.items = items; S.refunds = refunds; S.toAnswer = toAnswer; S.toChase = toChase;
 }
-const match = i => S.f[i.kind] && S.f[i.group];
+const match = i => S.f[i.fkey] && S.f[i.group];
 const ymKey = () => isoOf(S.ym[0], S.ym[1], 1).slice(0, 7);
 const inMonth = i => i.date && i.date.slice(0, 7) === ymKey();
 const clashes = i => i.date && S.clash.has(i.date) && S.clash.get(i.date).includes(i);
 const itemOf = id => S.items.find(i => i.id === id);
 /** Where a booking or an enquiry is up to, in words. */
-const statusWords = i => i.kind === "booked" ? (i.owing > 0 ? "Booked (" + money(i.owing) + " to pay)" : "Booked (paid)") : i.kind === "waiting" ? "Waiting on deposit" : i.status === "New" ? "Enquiry: new" : "Enquiry: waiting on response";
+const statusWords = i => i.kind === "booked" ? "Booked (paid)" : i.kind === "deposit" ? "Deposit received (" + money(i.owing) + " to pay)" : i.kind === "done" ? "Done" + (i.owing > 0 ? " (" + money(i.owing) + " to pay)" : "")
+  : i.kind === "waiting" ? "Waiting on deposit" : i.status === "New" ? "Enquiry: new" : "Enquiry: waiting on response";
 function badges(i) {
   const t = statusWords(i);
   return "<span class=\"badge " + i.kind + "\">" + esc(t) + "</span>" + (clashes(i) ? "<span class=\"badge clashb\">Clash</span>" : "");
 }
 /* In a sentence a name loses any note in brackets: "Jess (example)" reads as "Jess". */
 const plain = i => withoutBrackets(i.name);
-const said = i => plain(i) + (i.kind === "booked" ? " is booked" : i.kind === "waiting" ? " is waiting on deposit" : " has enquired");
-const word = i => i.kind === "booked" ? "booked" : i.kind === "waiting" ? "waiting on deposit" : "enquiry";
+const said = i => plain(i) + (i.kind === "booked" || i.kind === "done" ? " is booked" : i.kind === "deposit" ? " has paid the deposit" : i.kind === "waiting" ? " is waiting on deposit" : " has enquired");
+const word = i => i.kind === "booked" ? "booked" : i.kind === "deposit" ? "deposit received" : i.kind === "done" ? "done" : i.kind === "waiting" ? "waiting on deposit" : "enquiry";
 
 /* ---------- the screen ---------- */
 SCREENS.clients = {
@@ -85,7 +89,7 @@ SCREENS.clients = {
       "<div class=\"cal\"><div id=\"clashes\"></div>" +
       "<div class=\"caltile\"><div class=\"mbar\"><button type=\"button\" data-do=\"month\" data-by=\"-1\" data-fid=\"prev\" aria-label=\"Previous month\">&lt;</button><div id=\"mlabel\" aria-live=\"polite\"></div><button type=\"button\" data-do=\"month\" data-by=\"1\" data-fid=\"next\" aria-label=\"Next month\">&gt;</button></div>" +
       "<div class=\"calwrap\"><div class=\"grid\" id=\"grid\"></div></div></div>" +
-      "<div class=\"key\"><span><i class=\"dot\" aria-hidden=\"true\"></i>Booked</span><span><i class=\"dot waiting\" aria-hidden=\"true\"></i>Waiting on deposit</span><span><i class=\"keyq wm-card\" aria-hidden=\"true\"></i>Enquiry</span><span><i class=\"bang\" aria-hidden=\"true\">!</i>Clash</span></div></div>" +
+      "<div class=\"key\"><span><i class=\"dot waiting\" aria-hidden=\"true\"></i>Waiting on deposit</span><span><i class=\"dot deposit\" aria-hidden=\"true\"></i>Deposit received</span><span><i class=\"dot\" aria-hidden=\"true\"></i>Booked</span><span><i class=\"dot done\" aria-hidden=\"true\"></i>Done</span><span><i class=\"keyq wm-card\" aria-hidden=\"true\"></i>Enquiry</span><span><i class=\"bang\" aria-hidden=\"true\">!</i>Clash</span></div></div>" +
       "<div class=\"list\" id=\"list\"></div></div>";
   },
   fill(first) { drawFilter(); drawCal(); drawList(); if (first) swipeHint(); }
@@ -101,7 +105,7 @@ function filterSummary() {
 }
 function tickHtml(k, label, desc, dot) {
   return "<button class=\"tick\" type=\"button\" data-do=\"tick\" data-tick=\"" + k + "\" data-fid=\"t-" + k + "\" aria-pressed=\"" + S.f[k] + "\"><span class=\"box\" aria-hidden=\"true\">" + CHECK + "</span>" + (dot ? "<i class=\"dot " + (k === "booked" ? "" : k) + "\" aria-hidden=\"true\"></i>" : "") +
-    "<span class=\"tl\"><span>" + label + "</span>" + (desc ? "<span>" + desc + "</span>" : "") + "</span><span class=\"n\">" + S.items.filter(i => i.kind === k || i.group === k).length + "</span></button>";
+    "<span class=\"tl\"><span>" + label + "</span>" + (desc ? "<span>" + desc + "</span>" : "") + "</span><span class=\"n\">" + S.items.filter(i => i.fkey === k || i.group === k).length + "</span></button>";
 }
 const ticksS = () => STATUS_KEYS.map(k => tickHtml(k[0], k[1], k[2], true)).join(""), ticksT = () => TYPE_KEYS.map(k => tickHtml(k, k, "", false)).join("");
 const filterHead = "<div class=\"f-head\"><h2 id=\"dlg-title\">filter</h2><button class=\"linkbtn\" type=\"button\" data-do=\"filter-reset\" data-fid=\"reset\">Reset</button></div>";
@@ -115,7 +119,7 @@ function drawFilter() {
 }
 /* Brings ticks that are already on screen up to date, so a tick can ease in and out. */
 function syncTicks(root) {
-  $$("[data-tick]", root).forEach(b => { b.setAttribute("aria-pressed", S.f[b.dataset.tick]); $(".n", b).textContent = S.items.filter(i => i.kind === b.dataset.tick || i.group === b.dataset.tick).length; });
+  $$("[data-tick]", root).forEach(b => { b.setAttribute("aria-pressed", S.f[b.dataset.tick]); $(".n", b).textContent = S.items.filter(i => i.fkey === b.dataset.tick || i.group === b.dataset.tick).length; });
 }
 function showLabel() { const n = S.items.filter(match).length; return "Show " + n + " booking" + (n === 1 ? "" : "s") + " and enquiries"; }
 const hiding = off => off.length ? "Hiding " + off.join(", ") : "All showing";
@@ -150,17 +154,20 @@ function drawCal() {
   let h = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => "<div class=\"dow\" aria-hidden=\"true\">" + d + "</div>").join("");
   for (let c = 0; c < cells; c++) {
     const iso = addDays(start, c), p = dParts(iso), out = p.m !== m;
-    const its = (!out && byDay.get(iso)) || [], clash = !out && S.clash.has(iso), q = its.find(i => !i.booking);
-    const cls = (out ? " out" : "") + (iso === today ? " today" : "") + (!out && iso < today ? " past" : "");      /* days already gone are dulled, with whatever is on them */
+    const its = (!out && byDay.get(iso)) || [], clash = !out && S.clash.has(iso);
+    /* the whole tile takes the colour of its booking, the most urgent one if there are more; a day with only enquiries keeps the dashed look */
+    const bk = its.filter(i => i.booking).sort((a, b) => URGENT[a.kind] - URGENT[b.kind])[0], tone = bk ? " st-" + bk.kind : its.length ? " st-enquiry" : "";
+    const cls = (out ? " out" : "") + (iso === today ? " today" : "") + (!out && iso < today ? " past" : "") + tone;      /* days already gone are dulled, with whatever is on them */
     if (P) {
-      const inner = "<span class=\"num " + (its.length ? its[0].kind : "") + "\">" + p.d + "</span><span class=\"nm\">" + (its.length ? esc(its[0].short) + (its.length > 1 ? " +" + (its.length - 1) : "") : "") + "</span>";
+      const first = bk || its[0];
+      const inner = "<span class=\"num\">" + p.d + "</span><span class=\"nm\">" + (its.length ? esc(first.short) + (its.length > 1 ? " +" + (its.length - 1) : "") : "") + "</span>";
       const bang = clash ? "<span class=\"bang\" role=\"img\" aria-label=\"Clash\">!</span>" : "";
       /* more than one thing on a day: the day opens a sheet with all of them (the day alone used to reach only the first enquiry) */
       if (its.length > 1) h += "<div class=\"pc wm-cell" + cls + "\"><button type=\"button\" class=\"pcb\" data-do=\"day\" data-day=\"" + iso + "\" data-fid=\"c-" + iso + "\" aria-haspopup=\"dialog\" aria-label=\"" + its.length + " things on " + fmt(iso) + ": " + esc(its.map(i => i.name + ", " + word(i)).join("; ")) + "\">" + inner + "</button>" + bang + "</div>";
       else h += "<div class=\"pc wm-cell" + cls + "\">" + (its.length ? "<button type=\"button\" class=\"pcb\" data-do=\"item\" data-item=\"" + its[0].id + "\" data-fid=\"c-" + iso + "\" aria-haspopup=\"dialog\" aria-label=\"Open " + esc(its[0].name) + ", " + word(its[0]) + ", " + fmt(iso) + "\">" + inner + "</button>" : inner) + bang + "</div>";      /* anyone on the day opens their sheet: booked, waiting or an enquiry */
     } else {
-      h += "<div class=\"lc" + cls + (its.length ? " has" : "") + "\"><div class=\"dn\">" + p.d + "</div>" + its.map(i =>
-        "<button type=\"button\" class=\"pill " + i.kind + "\" data-do=\"item\" data-item=\"" + i.id + "\" data-fid=\"c-" + i.id + "\" aria-haspopup=\"dialog\" aria-label=\"Open " + esc(i.name) + ", " + word(i) + ", " + fmt(iso) + "\">" + esc(i.short) + "</button>").join("") + (clash ? "<span class=\"ctag\">Clash</span>" : "") + "</div>";
+      h += "<div class=\"lc" + cls + (its.length ? " has" : "") + "\"><div class=\"dn\">" + p.d + "</div>" + its.slice().sort((a, b) => (a.booking ? URGENT[a.kind] : 9) - (b.booking ? URGENT[b.kind] : 9)).map(i =>
+        "<button type=\"button\" class=\"pill " + i.kind + (i.booking && its.filter(o => o.booking).length > 1 ? " multi" : "") + "\" data-do=\"item\" data-item=\"" + i.id + "\" data-fid=\"c-" + i.id + "\" aria-haspopup=\"dialog\" aria-label=\"Open " + esc(i.name) + ", " + word(i) + ", " + fmt(iso) + "\">" + esc(i.short) + "</button>").join("") + (clash ? "<span class=\"ctag\">Clash</span>" : "") + "</div>";
     }
   }
   $("#grid").innerHTML = h;
@@ -171,30 +178,41 @@ function drawCal() {
 }
 
 /* ---------- the list ---------- */
-/* The quick buttons behind a row swiped left, by where the client is up to: [tap, words, look]. */
-const quickActs = i => i.kind === "booked" ? [["q-pay", "Payment in", "gold"], ["q-bond", "Bond", "dark"], ["q-more", "More", "dark"]]
-  : i.kind === "waiting" ? [["q-deposit", "Deposit in", "gold"], ["q-more", "More", "dark"]] : [["q-keen", "Keen", "gold"], ["q-status", "Status", "dark"]];
+/* The round buttons behind a booking's row swiped left (look B, with Aadil's third Cancel button): [tap, words, icon]. */
+const QUICK_ICON = {
+  board: '<rect x="6" y="2.5" width="12" height="19" rx="2"/><rect x="8.6" y="8.2" width="6.8" height="5.2" rx=".9"/><path d="M9.2 5.3h5.6M9.2 16.4h5.6M10.4 18.7h3.2"/>',
+  screen: '<rect x="2.5" y="4.5" width="19" height="12.5" rx="2"/><path d="M9 20.5h6M12 17v3.5"/><path d="M5.6 14l3.6-3.6 2.8 2.8 2-2 4.4 3.4"/><circle cx="16.3" cy="8" r="1.3"/>',
+  cancel: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.2"/><path d="M3.5 9.5h17M8 3v4M16 3v4M9.6 12.6l4.8 4.8M14.4 12.6l-4.8 4.8"/>'
+};
+const QUICK = [["q-board", "Board", "board"], ["q-screen", "Screen", "screen"], ["q-cancel", "Cancel", "cancel"]];
+/** The three round buttons for one booking. hidden = behind a row that isn't open yet, so not in the tab order. */
+const quickHtml = (i, hidden) => QUICK.map(a => "<button type=\"button\" class=\"qbtn\" data-do=\"" + a[0] + "\" data-who=\"" + i.id + "\" data-fid=\"" + a[0] + "-" + i.id + "\"" + (hidden ? " tabindex=\"-1\"" : "") +
+  " aria-label=\"" + a[1] + ", " + esc(i.name) + "\"><span class=\"qc wm-qc" + (a[2] === "cancel" ? " red" : "") + "\" aria-hidden=\"true\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\">" + QUICK_ICON[a[2]] + "</svg></span><span class=\"ql\" aria-hidden=\"true\">" + a[1] + "</span></button>").join("");
 function rowHtml(i) {
   const p = i.date ? dParts(i.date) : null, mon = /^([A-Za-z]{3})[a-z]*\s+(\d{4})$/.exec(i.dateText);
   const when = p ? "<span>" + p.wd + "</span><span>" + p.d + " " + p.mo + "</span>" : "<span>No date</span><span>" + esc(mon ? mon[1] + " " + mon[2] : i.dateText || "yet") + "</span>";
-  const body = "<span class=\"when\">" + when + "</span><span class=\"who\"><span class=\"n\">" + esc(i.name) + "</span><span class=\"s\">" + esc([i.type, i.venue].filter(Boolean).join(", ")) + "</span><span class=\"bs\">" + badges(i) + sourceTag(sourceOf(i.ref, !i.booking), i.id, true) + "</span></span>";
+  /* how they got in touch shows only on the client sheet, not in the list */
+  const body = "<span class=\"when\">" + when + "</span><span class=\"who\"><span class=\"n\">" + esc(i.name) + "</span><span class=\"s\">" + esc([i.type, i.venue].filter(Boolean).join(", ")) + "</span><span class=\"bs\">" + badges(i) + "</span></span>";
   /* a booking shows its invoice number, the reference used everywhere. Tapping a row opens the client. */
   const row = "<button type=\"button\" class=\"row\" data-do=\"item\" data-item=\"" + i.id + "\" data-fid=\"r-" + i.id + "\" aria-haspopup=\"dialog\">" + body + (i.booking && txt(i.ref.invoice) ? "<span class=\"inv\">" + esc(i.ref.invoice) + "</span>" : "") + "</button>";
-  if (!phone()) return row;
-  const acts = quickActs(i);
-  return "<div class=\"srow\" data-sid=\"" + i.id + "\" style=\"--acts:" + acts.length + "\"><div class=\"sacts\" aria-hidden=\"true\">" + acts.map(a =>
-    "<button type=\"button\" class=\"sact " + a[2] + "\" data-do=\"" + a[0] + "\" data-who=\"" + i.id + "\" data-fid=\"" + a[0] + "-" + i.id + "\" tabindex=\"-1\">" + a[1] + "</button>").join("") + "</div>" + row + "</div>";
+  if (!i.booking) return row;                                         /* an enquiry's row doesn't swipe: its sheet has Keen and the status */
+  if (!phone()) return "<div class=\"lrow\">" + row + "<div class=\"lacts\" role=\"group\" aria-label=\"" + esc(i.name) + "\">" + quickHtml(i, false) + "</div></div>";      /* a laptop: the same buttons beside the row, when the pointer is on it */
+  return "<div class=\"srow\" data-sid=\"" + i.id + "\"><div class=\"sacts\" aria-hidden=\"true\">" + quickHtml(i, true) + "</div>" + row + "</div>";
 }
+/** A cancelled booking whose refund is still to send: at the bottom of the list until Refund sent is ticked on its sheet. */
+const refundRow = r => { const p = /^\d{4}-\d{2}-\d{2}$/.test(txt(r.ref.date)) ? dParts(r.ref.date) : null; return "<button type=\"button\" class=\"row\" data-do=\"item\" data-item=\"" + r.id + "\" data-fid=\"r-" + r.id + "\" aria-haspopup=\"dialog\"><span class=\"when\">" + (p ? "<span>" + p.wd + "</span><span>" + p.d + " " + p.mo + "</span>" : "<span>No date</span>") + "</span><span class=\"who\"><span class=\"n\">" + esc(r.name) + "</span>" +
+  "<span class=\"s\">" + esc(txt(r.ref.cancelReason)) + "</span><span class=\"bs\"><span class=\"badge refund\">Refund " + money(r.refund) + " to send</span></span></span>" + (txt(r.ref.invoice) ? "<span class=\"inv\">" + esc(r.ref.invoice) + "</span>" : "") + "</button>"; };
 function drawList() {
   if (!$("#list")) return;
   const shown = S.items.filter(match), mName = MONTHS[S.ym[1]], sec = (title, rows) => "<h3 class=\"sec\">" + title + "</h3><div class=\"rows\">" + rows + "</div>";
-  if (!phone()) { $("#list").innerHTML = sec("Everything that matches", shown.map(rowHtml).join("") || "<p class=\"empty\">Nothing matches these filters.</p>"); return; }
+  const refunds = S.refunds.length ? sec("Refunds to send", S.refunds.map(refundRow).join("")) : "";
+  if (!phone()) { $("#list").innerHTML = sec("Everything that matches", shown.map(rowHtml).join("") || "<p class=\"empty\">Nothing matches these filters.</p>") + refunds; return; }
   const month = shown.filter(inMonth), enq = shown.filter(i => !i.date && !i.booking), bk = shown.filter(i => !i.date && i.booking);
   $("#list").innerHTML = sec("In " + mName, month.map(rowHtml).join("") || "<p class=\"empty\">Nothing in " + mName + (S.items.some(inMonth) ? " with these filters." : ".") + "</p>") +
-    (enq.length ? sec("Enquiries with no date yet", enq.map(rowHtml).join("")) : "") + (bk.length ? sec("Bookings with no date yet", bk.map(rowHtml).join("")) : "");
+    (enq.length ? sec("Enquiries with no date yet", enq.map(rowHtml).join("")) : "") + (bk.length ? sec("Bookings with no date yet", bk.map(rowHtml).join("")) : "") + refunds;
 }
 
-/* ---------- the day's list, the date step, and an enquiry's status (shown on the client sheet, client.js) ---------- */
+/* ---------- the day's list, and the date step when an enquiry becomes a booking ---------- */
 let picked = "";                         /* the enquiry the date step is for */
 /** A day with more than one thing on it: everything on it, each row opening that client's sheet. */
 function openDay(iso) {
@@ -204,47 +222,15 @@ function openDay(iso) {
       "<span class=\"dgo\" aria-hidden=\"true\">Open</span></button>").join("") +
     "<button class=\"btn big done\" type=\"button\" data-do=\"close\">Done</button>");
 }
+/** Confirm on an enquiry moved to Waiting on deposit, with no event date yet: the date first, then it saves (client.js). */
 function askDate(q) {
   picked = "q" + q.row;
   show("date", enquiryHeadOf(q) + "<div class=\"datestep\"><div class=\"fld\"><label for=\"edate\">When is the event?</label><input class=\"inp wm-card\" id=\"edate\" type=\"date\" min=\"" + todayIso() + "\"></div>" +
     "<button class=\"btn big\" type=\"button\" id=\"mk\" data-do=\"make\" disabled>Create the booking</button><button class=\"btn line\" type=\"button\" data-do=\"make\" data-skip>Don’t know yet</button></div>" +
-    "<p class=\"err\" id=\"err\" role=\"alert\"></p><button class=\"linkbtn center\" type=\"button\" data-do=\"item\" data-item=\"" + picked + "\">Back</button>");
+    "<p class=\"err\" id=\"err\" role=\"alert\"></p><button class=\"linkbtn center\" type=\"button\" data-do=\"date-back\">Back</button>");
   $("#edate").addEventListener("input", e => { $("#mk").disabled = !e.target.value; });
 }
-/**
- * An enquiry's status, from the keys on its sheet. It shows straight away, then saves. Waiting on deposit makes the booking
- * (asking for the date first if there is none). Any other change has Undo, back to what it was.
- */
-async function setEnquiryStatus(q, status, eventDate) {
-  const now = txt(q.status) || "New"; if (status === now) return;
-  const date = parseLoose(q.date);
-  if (status === "Waiting on deposit" && !date && eventDate === undefined) { askDate(q); return; }
-  const closes = status === "Waiting on deposit" || status === "Cancelled", when = eventDate || date || "", row = q.row, name = q.name;
-  const venue = ((/venue:\s*([^\n]+)/i.exec(txt(q.message)) || [])[1] || "").trim(), src = sourceOf(q, true);
-  const slot = $("#err", dlg); if (slot) slot.textContent = "";
-  const saved = save("setEnquiryStatus", { row, name, status, eventDate: eventDate || "" }, data => {
-    const x = data.enquiries.find(r => r.row === row); if (!x) return;
-    x.status = status; x.what = status === "Waiting on deposit" ? "Moved to bookings" : status === "Cancelled" ? "Cancelled" : "";
-    if (status === "Waiting on deposit") data.bookings.push({ row: -Date.now(), client: name, date: when, status: when ? "Waiting on deposit" : "Date needed", type: q.type, venue, suburb: "", cancelled: "", total: 0, received: 0, owing: 0, invoice: "", gotInTouch: src.source, handle: src.handle });
-  });
-  if (closes) hide();
-  const res = await saved;
-  if (!res) {
-    /* it didn't save: if the sheet closed for it, open it again where it was, with the reason in it (as Add a booking does) */
-    const back = enquiryAt(row);
-    if (closes && back && !dlg.open) {
-      const said_ = $("#toast").textContent;
-      if (eventDate !== undefined && !date) { askDate(back); if (eventDate) { $("#edate").value = eventDate; $("#mk").disabled = false; } } else openSheet("q" + row);
-      $("#err").textContent = said_;
-    }
-    return;
-  }
-  if (status === "Waiting on deposit") { toast(name + " is now a booking" + (res.invoice ? ", " + res.invoice : "") + ", waiting on deposit."); return; }
-  toast(status === "Cancelled" ? name + "’s enquiry is cancelled." : name + ": " + status.toLowerCase() + ".", async () => {
-    const undone = await save("setEnquiryStatus", { row, name, status: now, eventDate: "" }, data => { const x = data.enquiries.find(r => r.row === row); if (x) { x.status = now; x.what = ""; } });
-    if (undone) toast(name + ": back to " + now.toLowerCase() + ".");
-  });
-}
+SHEETS.date = { dirty: () => !!held && held.id === picked && changesOf(whoOf(picked)).any, reopen() { const q = whoOf(picked); if (q) askDate(q); } };
 
 /* ---------- add a booking (not designed yet: a plain sheet, in the style of the Money sheets) ---------- */
 function newFields() {
@@ -328,13 +314,12 @@ Object.assign(TAPS, {
   "item": (el, e) => {
     const sr = el.closest(".srow");
     if (sr && (sr.dataset.dragged || sr.classList.contains("open"))) { if (!sr.dataset.dragged) setOpen(sr, false); return; }      /* a tap on an open row closes it */
-    const tag = e && e.target && e.target.closest && e.target.closest("[data-src]");
-    if (tag) { openSource(tag.dataset.src); return; }                  /* the tag on a row changes how they got in touch */
     openSheet(el.dataset.item);
   },
   "day": el => openDay(el.dataset.day),
   "day-change": el => openSheet(el.dataset.item),
-  "make": el => { const q = whoOf(picked); if (q) setEnquiryStatus(q, "Waiting on deposit", el.dataset.skip != null ? "" : $("#edate").value); },
+  "make": el => { if (!held || held.id !== picked) return; held.eventDate = el.dataset.skip != null ? "" : $("#edate").value; sheetFor = picked; confirmClient(); },
+  "date-back": () => openSheet(picked, true),
   "new": () => openNew(),
   "yes": el => { const on = el.getAttribute("aria-pressed") !== "true"; el.setAttribute("aria-pressed", on); if (on) form.values[el.dataset.key] = "Yes"; else delete form.values[el.dataset.key]; }
 });
@@ -343,13 +328,12 @@ Object.assign(TAPS, {
    It follows the finger 1:1, once the drag is clearly sideways (10 px), so scrolling up and down still works. Let go past
    half the buttons, or with a quick flick, and it stays open; otherwise it slides back. One row is open at a time: a touch
    anywhere else, or scrolling, closes it. With reduced motion it opens and closes without sliding. */
-const SWIPE_W = 58;                                         /* px per quick button */
 let swOpen = null, sw = null;
 const reduced = () => matchMedia("(prefers-reduced-motion:reduce)").matches;
 function setOpen(row, open) {
   if (open && swOpen && swOpen !== row) setOpen(swOpen, false);
   row.classList.toggle("open", open);
-  const acts = $(".sacts", row); acts.setAttribute("aria-hidden", !open); $$(".sact", row).forEach(b => { b.tabIndex = open ? 0 : -1; });
+  const acts = $(".sacts", row); acts.setAttribute("aria-hidden", !open); $$(".qbtn", row).forEach(b => { b.tabIndex = open ? 0 : -1; });
   swOpen = open ? row : swOpen === row ? null : swOpen;
 }
 document.addEventListener("touchstart", e => {
@@ -357,7 +341,7 @@ document.addEventListener("touchstart", e => {
   if (swOpen && swOpen !== row) setOpen(swOpen, false);                 /* a touch anywhere else closes the open row */
   sw = null;
   if (!row || !phone() || e.touches.length !== 1 || e.target.closest(".sacts")) return;
-  const t = e.touches[0], w = $$(".sact", row).length * SWIPE_W;
+  const t = e.touches[0], w = $(".sacts", row).offsetWidth;          /* the three round buttons and their gaps (app.css) */
   sw = { row, x: t.clientX, y: t.clientY, last: t.clientX, at: e.timeStamp, v: 0, w, base: row.classList.contains("open") ? -w : 0, now: 0, on: false, off: false };
 }, { passive: true });
 document.addEventListener("touchmove", e => {

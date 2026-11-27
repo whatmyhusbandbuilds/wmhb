@@ -12,7 +12,7 @@ function demoServer(fn, arg) {
     const day = { hours: "3", powerPoint: "Yes", setupTime: "", startTime: "", runningIt: "", venueConfirmed: "", powerSorted: "", feePaid: "", bondPaid: "", designApproved: "", startSet: "", packed: "", packedItems: "", notes: "" };
     const design = { customBoard: "", board: "", screen: "", canva: "", stickerPrinted: "", names: "", line2: "", defaultWording: "", thanksWording: "", colours: "", notes: "", photos: "", madeOn: "" };
     const bk = (row, inv, client, date, type, venue, pkg, price, more) => Object.assign({
-      row, id: ref("B", row - 4), invoice: ref("INV", inv), client, date, type, venue, suburb: "", region: "Auckland", pkg, customPrice: price, cancelled: "", notes: "", statusByHand: "", gotInTouch: "", handle: "",
+      row, id: ref("B", row - 4), invoice: ref("INV", inv), client, date, type, venue, suburb: "", region: "Auckland", pkg, customPrice: price, cancelled: "", notes: "", gotInTouch: "", handle: "", cancelReason: "", refund: "", refundSent: "",
       phone: "", email: "", insta: "", source: "", referredBy: "", hostHours: 0, noPowerPoint: "", eventDay: Object.assign({}, day), videos: {}, designs: Object.assign({}, design)
     }, more || {});
     const on = (b, eventDay, designs) => { Object.assign(b.eventDay, eventDay || {}); Object.assign(b.designs, designs || {}); return b; };
@@ -30,7 +30,8 @@ function demoServer(fn, arg) {
         on(bk(10, 6, "Hannah Reid", at(108), "Wedding", "Waikato", "Forever", 1305, { region: "Hamilton", phone: "021 555 0123", gotInTouch: "Text or call", handle: "021 555 0123" }), { hours: "6" }),
         on(bk(11, 7, "Mele", at(150), "Engagement party", "", "Celebration hire", 990, { noPowerPoint: "Yes", email: "mele@example.com", gotInTouch: "TikTok", handle: "@sample.mele" })),
         on(bk(12, 8, "Glow Studio (Mia)", at(9), "Brand / corporate", "To confirm, likely their studio", "Corporate hire", 910, { phone: "09 555 0100", gotInTouch: "Messenger", handle: "sample.glowstudio" }), { runningIt: "Aadil" }),
-        bk(13, 9, "Kiri", at(20), "Birthday", "", "Celebration hire", 450, { cancelled: "Yes" })
+        bk(13, 9, "Kiri", at(20), "Birthday", "", "Celebration hire", 450, { cancelled: "Yes", cancelReason: "Changed plans", refund: 0 }),
+        bk(14, 10, "Aroha", at(30), "Birthday", "Beach Club", "Celebration hire", 910, { phone: "021 555 0166", gotInTouch: "Instagram", handle: "@sample.aroha" })
       ],
       enquiries: [
         eq(2, "Rangi", "Instagram @sample.rangi", "Wedding", "", "", "Cancelled", "Cancelled"),
@@ -79,9 +80,22 @@ function demoServer(fn, arg) {
   const PACKING = ["Top board", "Bottom board", "Base", "Laptop and charger", "Camera", "Monitor", "Light", "Vintage phone", "Speaker", "Cable box", "10 m extension cord", "Table message cards"];
   const db = demoDb, of = (rows, inv, what) => rows.filter(p => !p.removed && p.invoice === inv && (!what || p.what === what)).reduce((s, p) => s + p.amount, 0);
   const next = list => Math.max(0, ...list) + 1;
+  /* the tracker's Deposit formula (version 20): up to INV-0008 the first $150; otherwise the package's Deposit words, or for
+     Custom the deposit of the packages for the same kind of event; a share of the total is rounded to the nearest $50 */
+  const price = b => num(b.customPrice) || num((db.packs.find(p => p[0] === b.pkg) || [])[2]);
+  function formulaDeposit(b) {
+    if (+b.invoice.slice(4) <= 8) return Number(db.terms[1][1].replace(/[^\d.]/g, ""));
+    let words = (db.packs.find(p => p[0] === b.pkg) || [])[6];
+    if (!words) { const kind = kindOfType(b.type), same = db.packs.filter(p => p[6] && kind && kindOfPackage({ for: p[1] }) === kind).map(p => p[6]).filter((w, i, a) => a.indexOf(w) === i); words = same.length === 1 ? same[0] : ""; }
+    const share = /(\d+)\s*%/.exec(words || "");
+    return share ? Math.round(price(b) * share[1] / 100 / 50) * 50 : words ? firstNumber(words) : "";
+  }
+  /* the Status formula (version 20): Cancelled, Date needed, then the hire money: Booked once it is all in (Done after the event
+     day), Deposit received once the deposit is in, otherwise Waiting on deposit */
   function formulaStatus(b) {
-    const least_ = Number(db.terms[1][1].replace(/[^\d.]/g, "")), received_ = of(db.payments, b.invoice, "Hire");
-    return b.cancelled === "Yes" ? "Cancelled" : b.statusByHand ? b.statusByHand : !b.date ? "Date needed" : received_ < least_ ? "Waiting on deposit" : b.date < t ? "Completed" : "Booked";
+    const got = of(db.payments, b.invoice, "Hire"), total = price(b);
+    return b.cancelled === "Yes" ? "Cancelled" : !b.date ? "Date needed" : total > 0 && got >= total ? (b.date < t ? "Done" : "Booked")
+      : got > 0 && got >= (num(formulaDeposit(b)) || 0) ? "Deposit received" : "Waiting on deposit";
   }
 
   /* ---------- the calls ---------- */
@@ -90,7 +104,7 @@ function demoServer(fn, arg) {
   const enquirySource = q => { if (q.gotInTouch) return { source: q.gotInTouch, handle: q.handle };
     const insta = /^instagram\s+(@\S+)/i.exec(q.contact), phone = /^phone\s+([\d\s()+-]{7,})$/i.exec(q.contact);
     return insta ? { source: "Instagram", handle: insta[1] } : phone ? { source: "Text or call", handle: phone[1].trim() } : { source: "", handle: "" }; };
-  const blank = { phone: "", email: "", insta: "", source: "", referredBy: "", suburb: "", region: "", pkg: "", customPrice: 0, cancelled: "", notes: "", statusByHand: "", gotInTouch: "", handle: "", hostHours: 0, noPowerPoint: "", eventDay: { hours: "3" }, videos: {}, designs: {} };
+  const blank = { phone: "", email: "", insta: "", source: "", referredBy: "", suburb: "", region: "", pkg: "", customPrice: 0, cancelled: "", notes: "", gotInTouch: "", handle: "", cancelReason: "", refund: "", refundSent: "", hostHours: 0, noPowerPoint: "", eventDay: { hours: "3" }, videos: {}, designs: {} };
   const book = fields => { row = next(db.bookings.map(b => b.row)); id = ref("B", row - 4); invoice = ref("INV", next(db.bookings.map(b => +b.invoice.slice(4)))); db.bookings.push(Object.assign({}, blank, { row, id, invoice, eventDay: { hours: "3" }, videos: {}, designs: {} }, fields)); };
   if (fn === "setEnquiryStatus") {
     const q = db.enquiries.find(x => x.row === arg.row && x.name === arg.name); if (!q) throw told("That enquiry is no longer there. Press Refresh.");
@@ -125,16 +139,43 @@ function demoServer(fn, arg) {
       return x;
     });
     found.forEach(x => { x.removed = arg.restore ? "" : t; });
-  } else if (fn === "setBookingStatus") {
-    const b = db.bookings.find(x => x.row === arg.row && x.id === arg.id); if (!b) throw told("The bookings have moved. Press Refresh and try again.");
-    more = { before: { byHand: b.statusByHand || "", cancelled: b.cancelled || "" } };
-    if (arg.restore) { b.statusByHand = arg.restore.byHand || ""; b.cancelled = arg.restore.cancelled || ""; }
-    else {
-      if (!["Waiting on deposit", "Booked", "Completed", "Cancelled"].includes(arg.status)) throw told("\"" + arg.status + "\" is not a booking status.");
-      if (arg.status === "Cancelled") { b.statusByHand = ""; b.cancelled = "Yes"; }
-      else { b.statusByHand = ""; b.cancelled = ""; if (formulaStatus(b) !== arg.status) b.statusByHand = arg.status; }
+  } else if (fn === "saveClient") {
+    /* everything checked first, then all of it at once, as saveClient_ in Code.gs */
+    if (arg.source && arg.source.source && !SOURCES.includes(arg.source.source)) throw told("\"" + arg.source.source + "\" is not an option for Got in touch by on the Settings tab.");
+    if (arg.kind === "enquiry") {
+      const q = db.enquiries.find(x => x.row === arg.row && x.name === arg.name); if (!q) throw told("The enquiries have moved. Press Refresh and try again.");
+      if (arg.status && !["New", "Waiting on response", "Waiting on deposit", "Cancelled"].includes(arg.status)) throw told("\"" + arg.status + "\" is not an enquiry status on the Settings tab.");
+      if (arg.status && (q.what === "Moved to bookings" || q.bookingId)) throw told("This enquiry is already booking " + (q.bookingId || "on the Clients tab") + ".");
+      if (!arg.status && !arg.source) throw told("There is nothing to save.");
+      if (arg.source) { q.gotInTouch = arg.source.source || ""; q.handle = String(arg.source.handle || "").trim(); }
+      if (arg.status) {
+        q.status = arg.status; q.what = arg.status === "Cancelled" ? "Cancelled" : ""; q.bookingId = "";
+        if (arg.status === "Waiting on deposit") {
+          const from = enquirySource(q);
+          book({ client: q.name, date: arg.eventDate || parseLoose(q.date) || "", phone: (/^Phone\s+(.+)/.exec(q.contact) || [])[1] || "", insta: (/^Instagram\s+(.+)/.exec(q.contact) || [])[1] || "", type: q.type, venue: ((/venue:\s*([^\n]+)/i.exec(q.message) || [])[1] || "").trim(), gotInTouch: from.source, handle: from.handle });
+          q.what = "Moved to bookings"; q.bookingId = id;
+        }
+      }
+    } else {
+      const b = db.bookings.find(x => x.row === arg.row && x.id === arg.id); if (!b || b.invoice !== arg.invoice) throw told("The bookings have moved. Press Refresh and try again.");
+      const removing = (arg.remove || []).map(e => {
+        const x = db.payments[e.row - 5];
+        if (e.tab !== "Payments" || e.invoice !== b.invoice) throw told("Only this booking’s own payments can be removed here.");
+        if (!x || x.removed || Math.abs(x.amount - num(e.amount)) > 0.004 || x.invoice !== e.invoice || x.what !== e.what) throw told("The Payments tab has changed since the app read it. Press Refresh and try again.");
+        return x;
+      });
+      (arg.payments || []).forEach(p => { if (!(num(p.amount) > 0)) throw told("A payment needs an amount above zero."); });
+      if ("date" in arg && !/^\d{4}-\d{2}-\d{2}$/.test(arg.date || "")) throw told("Pick the new event date.");
+      if (arg.cancel && !String(arg.cancel.reason || "").trim()) throw told("Say why the booking is cancelled.");
+      if (!removing.length && !(arg.payments || []).length && !arg.source && !("date" in arg) && !arg.cancel && !("refundSent" in arg)) throw told("There is nothing to save.");
+      removing.forEach(x => { x.removed = t; });
+      (arg.payments || []).forEach(p => db.payments.push({ date: t, invoice: b.invoice, amount: num(p.amount), what: p.what, note: "", removed: "" }));
+      more = { rows: (arg.payments || []).map((p, i) => 5 + db.payments.length - arg.payments.length + i) };
+      if (arg.source) { b.gotInTouch = arg.source.source || ""; b.handle = String(arg.source.handle || "").trim(); }
+      if ("date" in arg) b.date = arg.date;
+      if (arg.cancel) { b.cancelled = "Yes"; b.cancelReason = String(arg.cancel.reason).trim(); b.refund = num(arg.cancel.refund); b.refundSent = ""; }
+      if ("refundSent" in arg) b.refundSent = arg.refundSent ? t : "";
     }
-    more.status = formulaStatus(b);
   } else if (fn === "setContact") {
     if (arg.source && !SOURCES.includes(arg.source)) throw told("\"" + arg.source + "\" is not an option for Got in touch by on the Settings tab.");
     const x = arg.kind === "enquiry" ? db.enquiries.find(q => q.row === arg.row && q.name === arg.name) : db.bookings.find(b => b.row === arg.row && b.id === arg.id);
@@ -168,14 +209,13 @@ function demoServer(fn, arg) {
   }
 
   /* ---------- what the tracker's formulas would work out ---------- */
-  /* Status: Cancelled, then "Status by hand", then from the money and the date (removed payments don't count) */
-  const price = b => num(b.customPrice) || num((db.packs.find(p => p[0] === b.pkg) || [])[2]);
+  /* Status and Deposit as formulaStatus and formulaDeposit above; removed payments don't count */
   const bookings = db.bookings.map(b => {
     const total = price(b), received = of(db.payments, b.invoice, "Hire"), cancelled = b.cancelled === "Yes";
     const status = formulaStatus(b);
     const owing = cancelled ? 0 : total - received;
     return Object.assign({}, b, {
-      status, total, received, owing, nextStep: status === "Waiting on deposit" ? "Get deposit" : status === "Booked" && owing > 0 ? "Balance due" : "",
+      status, total, received, owing, deposit: formulaDeposit(b), nextStep: status === "Waiting on deposit" ? "Get deposit" : status === "Deposit received" ? "Balance due" : "",
       bond: of(db.payments, b.invoice, "Bond back") ? "Returned" : of(db.payments, b.invoice, "Bond in") ? "Held" : "", costs: of(db.expenses, b.invoice)
     });
   });

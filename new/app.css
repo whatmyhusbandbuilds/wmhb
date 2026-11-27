@@ -445,10 +445,6 @@ select.inp option{background:#27251F;color:var(--text)}
 
 /* ---------- money: the client sheet and the expense sheet ---------- */
 dialog h2.tight{margin:2px 0 2px}
-.tot{display:flex;gap:12px;margin:14px 0 4px;padding:12px 0;border-top:1.5px solid var(--text);border-bottom:1.5px solid var(--text)}
-.tot>div{flex:1;min-width:0}
-.tot>div>div:first-child{font-size:12px;font-weight:800;color:var(--mute)}
-.tot>div>div+div{font-size:20px;font-weight:900;letter-spacing:-.03em}
 .sh{padding:16px 0 8px;font-size:14px;font-weight:800;color:var(--mute)}
 .sh.first{padding:14px 0 4px}
 .sh.mid{padding:14px 0 8px}
@@ -845,13 +841,9 @@ h1.pcn{margin:16px 0 0;font-size:28px;letter-spacing:-.04em;line-height:1.05}
 }
 
 /* ======================================================================
-   The Clients hub (Aadil's workflow, 27 Nov): the client sheet, swiping a row, Undo, how they got in touch, why on Event day
+   The Clients hub (Aadil's workflow, 27 Nov): the client sheet, swiping a row, how they got in touch, why on Event day
    ====================================================================== */
 @media (prefers-reduced-motion:reduce){.bar.ph,.bar.ph>*{transition:none!important}}
-
-/* the message at the bottom, with Undo */
-.toast.hasundo{display:flex;align-items:center;gap:14px;padding:6px 6px 6px 16px;pointer-events:auto}
-.toast .tundo{flex-shrink:0;min-height:44px;padding:0 16px;border:0;border-radius:10px;font:800 15px var(--font);color:#FAFAF7;text-shadow:0 -1px 0 rgba(0,0,0,.6);background:linear-gradient(180deg,#848890 0%,#62666D 36%,#51555B 62%,#45494F 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 -1px 0 rgba(0,0,0,.7),0 2px 0 #050505}
 
 /* how they got in touch: a small tag with the app's icon */
 .stag{display:inline-flex;align-items:center;gap:5px;min-height:22px;padding:1px 9px 1px 7px;border:1px solid rgba(250,250,247,.3);border-radius:999px;background:linear-gradient(180deg,#34373C,#212326);color:#FAFAF7;font:700 12px var(--font);white-space:nowrap;box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
@@ -896,22 +888,37 @@ button.stag::after{content:"";position:absolute;left:-4px;right:-4px;top:-7px;bo
 .dayrow{width:100%;min-height:56px;border:0;border-bottom:1.5px solid var(--line);background:transparent;color:var(--text);font-family:var(--font);text-align:left}
 .dayrow .dgo{flex-shrink:0;font-size:14px;font-weight:800;text-decoration:underline;text-underline-offset:3px}
 
-/* the Clients list on a phone: a row slides left over its quick buttons */
-.srow{position:relative;overflow:hidden}
+/* the Clients list on a phone: a booking's row slides left over three round buttons, Board, Screen and Cancel (look B).
+   --sw = how far it slides: the three 50 px circles, their 18 px gaps and a margin each side. On a narrow phone they shrink
+   to 46 px with 14 px gaps, so part of the client's name stays in sight. */
+.srow{position:relative;overflow:hidden;--sw:216px}
 .srow .row{position:relative;z-index:1;background:#0E0E0F;transition:transform 300ms cubic-bezier(.32,.72,0,1)}
 .srow.drag .row{transition:none}
-.srow.open .row{transform:translateX(calc(var(--acts) * -58px))}
-.sacts{position:absolute;top:0;right:0;bottom:1.5px;display:flex}
-.sact{width:58px;height:100%;padding:0 4px;border:0;font:800 13px/1.15 var(--font);white-space:normal}
-.sact.gold{color:#1C1B15;background:linear-gradient(180deg,#FFF2B8 0%,#F9D65C 36%,#EFBF30 62%,#DCA61C 100%)}
-.sact.dark{color:#FAFAF7;text-shadow:0 -1px 0 rgba(0,0,0,.6);background:linear-gradient(180deg,#848890 0%,#62666D 36%,#51555B 62%,#45494F 100%);box-shadow:inset 1px 0 0 rgba(255,255,255,.18)}
+.srow.open .row{transform:translateX(calc(var(--sw) * -1))}
+.sacts{position:absolute;top:0;right:0;bottom:1.5px;width:var(--sw);display:flex;align-items:center;justify-content:center;gap:18px}
+.qbtn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:0;border:0;background:transparent;color:var(--mute);font-family:var(--font)}
+.qc{display:flex;align-items:center;justify-content:center;width:50px;height:50px;border-radius:50%;color:#F9D65C;border:1.5px solid transparent;
+  background:linear-gradient(122deg,transparent 58%,rgba(255,255,255,.17) 70%,rgba(255,255,255,.05) 74%,transparent 80%) padding-box,linear-gradient(160deg,#4A4D53 0%,#1E1F22 38%,#0D0E0F 62%,#2A2C30 100%) padding-box,
+    linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,.25) 22%,rgba(0,0,0,.5) 60%,rgba(255,255,255,.4)) border-box;box-shadow:0 1px 0 rgba(0,0,0,.9),0 10px 20px rgba(0,0,0,.6)}
+.qc.red{color:#E8867A}
+.qc svg{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ql{font-size:11.5px;font-weight:800;line-height:1;color:var(--mute)}
+@media (max-width:359px){.srow{--sw:190px}.sacts{gap:14px}.qc{width:46px;height:46px}}
 .srow.hint .row{animation:swHint 1.6s cubic-bezier(.32,.72,0,1) both}
-@keyframes swHint{0%{transform:none}30%,62%{transform:translateX(calc(var(--acts) * -58px))}100%{transform:none}}
+@keyframes swHint{0%{transform:none}30%,62%{transform:translateX(calc(var(--sw) * -1))}100%{transform:none}}
 @media (prefers-reduced-motion:reduce){
   .srow .row{transition:none}
   .srow.hint .row{animation:swHintStep 1.6s step-end both}
 }
-@keyframes swHintStep{0%{transform:none}10%{transform:translateX(calc(var(--acts) * -58px))}75%{transform:none}}
+@keyframes swHintStep{0%{transform:none}10%{transform:translateX(calc(var(--sw) * -1))}75%{transform:none}}
+/* a laptop has no swipe: the same three buttons show at the end of a booking's row while the pointer is on it (or a key is) */
+.lrow{position:relative}
+.lacts{position:absolute;top:50%;right:0;display:flex;gap:14px;padding:4px 0 4px 28px;transform:translateY(-50%);background:linear-gradient(90deg,rgba(14,14,15,0),#0E0E0F 28px);opacity:0;pointer-events:none;transition:opacity 160ms ease}
+.lrow:hover .lacts,.lrow:focus-within .lacts{opacity:1;pointer-events:auto}
+.lacts .qbtn{gap:4px}
+.lacts .qc{width:44px;height:44px}
+@media (hover:none){.lacts{opacity:1;pointer-events:auto}}
+@media (prefers-reduced-motion:reduce){.lacts{transition:none}}
 
 /* Event day: why an item is green, or what is missing */
 .whyst{display:flex;align-items:center;gap:10px;margin:14px 0 6px;font-size:17px;font-weight:800}
@@ -927,3 +934,143 @@ button.stag::after{content:"";position:absolute;left:-4px;right:-4px;top:-7px;bo
 .dcontact .crow .cv{overflow-wrap:normal;word-break:normal}
 .dcontact .crow:last-child{border-bottom:0}
 .pknone{margin:14px 0 4px}
+
+/* ======================================================================
+   Version 20 (Aadil, 27 Nov): statuses in colour, the client sheet as a form with Confirm, money bar B, the bond tick,
+   History folded away, the whole calendar tile coloured, Cancel or change the date
+   ====================================================================== */
+:root{
+  --st-red:linear-gradient(180deg,#DD6356,#BE3227 55%,#A3251A);
+  --st-amber:linear-gradient(180deg,#FFD978,#F6A623 55%,#E8900F);
+  --st-green:linear-gradient(180deg,#56AE7D,#2B7B4F 55%,#226640);
+  --st-grey:linear-gradient(180deg,#8B8E94,#63666C 55%,#525559);
+  --st-lit:inset 0 1px 0 rgba(255,255,255,.5),0 2px 6px rgba(0,0,0,.5);
+  --st-rim:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,.25) 22%,rgba(0,0,0,.5) 60%,rgba(255,255,255,.4));
+  --st-glint:linear-gradient(122deg,transparent 58%,rgba(255,255,255,.2) 70%,rgba(255,255,255,.06) 74%,transparent 80%)
+}
+
+/* the four statuses everywhere: Waiting on deposit red, Deposit received yellow (dark words), Booked green, Done grey */
+.dot.waiting,.dot.deposit,.dot.done{border-color:transparent}
+.dot.waiting{background:var(--st-red)}
+.dot.deposit{background:var(--st-amber)}
+.dot.done{background:var(--st-grey)}
+.badge.waiting,.pill2.waiting{color:#fff;border-color:transparent;background:linear-gradient(180deg,#C94A3D,#B32E23 55%,#9C2318);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 1px 2px rgba(0,0,0,.6);text-shadow:0 -1px 0 rgba(0,0,0,.35)}
+.badge.deposit,.pill2.deposit{color:#1C1B15;border-color:transparent;background:var(--st-amber);box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 1px 2px rgba(0,0,0,.6);text-shadow:none}
+.badge.done,.pill2.over{color:#fff;border:2px solid transparent;background:linear-gradient(180deg,#76797F,#5D6066 55%,#4E5156);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 1px 2px rgba(0,0,0,.6);text-shadow:0 -1px 0 rgba(0,0,0,.35)}
+.badge.refund{color:#1C1B15;border-color:transparent;background:linear-gradient(180deg,#F6C3BB,#E8867A);box-shadow:inset 0 1px 0 rgba(255,255,255,.7);text-shadow:none}
+
+/* the calendar: the whole tile in its status colour, with the chrome rim and the glint; an enquiry's day keeps the dashed circle */
+.pc.st-waiting,.pc.st-deposit,.pc.st-booked,.pc.st-done,.lc.st-waiting,.lc.st-deposit,.lc.st-booked,.lc.st-done{border:1px solid transparent;box-shadow:0 1px 2px rgba(0,0,0,.8)}
+.pc.st-waiting,.lc.st-waiting{background:var(--st-glint) padding-box,var(--st-red) padding-box,var(--st-rim) border-box}
+.pc.st-deposit,.lc.st-deposit{background:var(--st-glint) padding-box,var(--st-amber) padding-box,var(--st-rim) border-box}
+.pc.st-booked,.lc.st-booked{background:var(--st-glint) padding-box,var(--st-green) padding-box,var(--st-rim) border-box}
+.pc.st-done,.lc.st-done{background:var(--st-glint) padding-box,var(--st-grey) padding-box,var(--st-rim) border-box}
+.pc.st-waiting .pcb,.pc.st-booked .pcb,.pc.st-done .pcb,.lc.st-waiting,.lc.st-booked,.lc.st-done{color:#fff;text-shadow:0 -1px 0 rgba(0,0,0,.45)}
+.pc.st-deposit .pcb,.lc.st-deposit{color:#1C1B15;text-shadow:none}
+.pc[class*=st-] .pcb{height:58px}
+.pc[class*=st-] .num{font-weight:800}
+.pc.st-enquiry .num{border:2px dashed #FAFAF7;font-weight:800}
+.pc.today.st-waiting,.pc.today.st-deposit,.pc.today.st-booked,.pc.today.st-done,.lc.today.st-waiting,.lc.today.st-deposit,.lc.today.st-booked,.lc.today.st-done{box-shadow:inset 0 0 0 2px #E9ECEF,0 1px 2px rgba(0,0,0,.8)}
+@media (min-width:1000px){
+  /* on a coloured tile the names sit on the colour; each booking keeps a small dot of its own status when the day has more than one */
+  .lc[class*=st-] .pill:not(.enquiry){padding:2px 0;border:0;background:transparent;box-shadow:none;color:inherit;text-shadow:inherit}
+  .lc .pill.enquiry{border-color:currentColor}
+  .lc.st-deposit .pill.enquiry{color:#1C1B15}
+  .lc .pill.multi::before{content:"";display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:50%;box-shadow:0 0 0 1.5px rgba(255,255,255,.85);vertical-align:0}
+  .lc .pill.multi.waiting::before{background:#BE3227}.lc .pill.multi.deposit::before{background:#F6A623}.lc .pill.multi.booked::before{background:#2B7B4F}.lc .pill.multi.done::before{background:#63666C}
+}
+
+/* a sheet's pinned bottom: what was saved or went wrong, then Confirm, always in sight above the safe area */
+.sfoot{position:sticky;bottom:calc(-24px - env(safe-area-inset-bottom));z-index:3;margin:20px -20px calc(-24px - env(safe-area-inset-bottom));padding:10px 20px calc(14px + env(safe-area-inset-bottom));background:#17181A;box-shadow:0 -1px 0 rgba(250,250,247,.14),0 -14px 24px rgba(0,0,0,.45)}
+.sfoot .said{margin:0 0 8px;font-size:14px;font-weight:800;line-height:1.35;color:#9FDDB8}
+.sfoot .said:empty{display:none}
+.sfoot .err{margin:0 0 8px}
+.sfmain .save{margin-top:0}
+.sfask{display:none}
+.sfoot.asking .sfmain{display:none}
+.sfoot.asking .sfask{display:block}
+.sfq{margin:0 0 10px;font-size:18px;font-weight:900;letter-spacing:-.02em}
+.sfbtns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.sfbtns .btn{min-height:52px;margin:0}
+.btn:disabled{opacity:.6}
+@media (min-width:1000px){.sfoot{bottom:-24px;margin:20px -24px -24px;padding:12px 24px 20px;border-radius:0 0 16px 16px}}
+
+/* the status keys on the client sheet: the one it is at lit in its colour, the others muted */
+.cskeys.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.skey{min-height:52px;padding:4px;border:0;border-radius:8px;background:transparent;color:var(--mute);font:800 13px/1.15 var(--font)}
+.skey.on,.csdone .skey{color:#fff;box-shadow:var(--st-lit);text-shadow:0 -1px 0 rgba(0,0,0,.4)}
+.skey.st-waiting{background:var(--st-red)}
+.skey.st-deposit{background:var(--st-amber);color:#1C1B15;text-shadow:none}
+.skey.st-booked{background:var(--st-green)}
+.skey.st-done{background:var(--st-grey)}
+.csdone{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;font-size:15px;line-height:1.35;color:var(--mute)}
+.csdone .skey{display:inline-flex;align-items:center;min-height:40px;padding:0 16px}
+.cskeynote{margin:8px 0 0;font-size:14px;font-weight:700;line-height:1.35}
+.cskeynote:empty{display:none}
+
+/* money bar B: what is paid, a sunk 4 px line filled in the status colour, a stop at the deposit and one at the total */
+.mbar2{margin:20px 0 4px}
+.mtop{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
+.mpaid{font-size:28px;font-weight:900;letter-spacing:-.04em;line-height:1.05}
+.mpaid span{font-size:15px;font-weight:700;letter-spacing:0;color:var(--mute)}
+.mgo{font-size:15px;font-weight:700;color:var(--mute);text-align:right}
+.mline{position:relative;height:4px;margin:10px 10px 34px}
+.mtrack{position:absolute;inset:0;border-radius:2px;background:linear-gradient(180deg,#09090A,#1A1B1D);box-shadow:inset 0 2px 4px rgba(0,0,0,.9),0 1px 0 rgba(255,255,255,.14)}
+.mfill,.mnew{position:absolute;top:0;bottom:0}
+.mfill{left:0;border-radius:2px;box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(0,0,0,.25);transition:width 700ms cubic-bezier(.23,1,.32,1)}
+.mnew{border-radius:0 2px 2px 0}
+.st-waiting .mfill{background:var(--st-red)}.st-deposit .mfill{background:var(--st-amber)}.st-booked .mfill,.st-done .mfill{background:var(--st-green)}
+.st-waiting .mnew{background:linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),var(--st-red)}
+.st-deposit .mnew{background:linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),var(--st-amber)}
+.st-booked .mnew,.st-done .mnew{background:linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),var(--st-green)}
+.mstop{position:absolute;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:#17181A;box-shadow:inset 0 0 0 2px #4A4D53;color:#fff;font:900 11px/20px var(--font);text-align:center}
+.mstop.on{background:var(--st-green);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 1px 2px rgba(0,0,0,.6)}
+.mlab{position:absolute;top:18px;transform:translateX(-50%);font-size:13px;font-weight:700;color:var(--mute);white-space:nowrap}
+.mlab.start{transform:translateX(-12px)}
+.mlab.end{transform:translateX(calc(-100% + 12px))}
+.mlab.full{left:auto;right:-10px;transform:none}
+.paybox{margin-top:4px}
+@media (prefers-reduced-motion:reduce){.mfill{transition:none}}
+
+/* the bond: one tick box, green once it is ticked */
+.bondtick{min-height:56px;padding:8px 14px;border-radius:10px;background:linear-gradient(180deg,#09090A,#1A1B1D);box-shadow:inset 0 2px 5px rgba(0,0,0,.9),0 1px 0 rgba(255,255,255,.14)}
+.bondtick .bl{flex:1;min-width:0;font-size:16px;font-weight:800}
+.bondtick .bs{font-size:13px;font-weight:700;color:var(--mute);white-space:nowrap}
+.bondtick.on{background:var(--st-green);box-shadow:var(--st-lit);text-shadow:0 -1px 0 rgba(0,0,0,.4)}
+.bondtick.on .bs{color:#fff}
+.bondtick.on .box{border-color:#fff}
+
+/* History, folded away until it is opened. A payment that will be removed on Confirm is muted, never crossed out. */
+.hhead{width:100%;min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;padding:0;border:0;border-bottom:1.5px solid var(--line);background:transparent;color:var(--mute);font:800 14px var(--font);text-align:left}
+.hhead .chev{flex-shrink:0;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transition:transform 300ms cubic-bezier(.32,.72,0,1)}
+.hhead[aria-expanded=true] .chev{transform:rotate(180deg)}
+@media (prefers-reduced-motion:reduce){.hhead .chev{transition:none}}
+
+/* a cancelled booking's refund, and the Cancel or change the date sheet */
+.refundbox{padding:12px 14px 6px;border-radius:10px;background:linear-gradient(180deg,#09090A,#1A1B1D);box-shadow:inset 0 2px 5px rgba(0,0,0,.9),0 1px 0 rgba(255,255,255,.14)}
+.refundbox .rv{margin:0;font-size:18px;font-weight:900;letter-spacing:-.02em}
+.cxopts{margin-top:14px}
+.cxopt{min-height:64px}
+.cxfld{margin-top:10px}
+.rlines{border-top:1.5px solid var(--line)}
+.rl{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1.5px solid var(--line);font-size:15px;line-height:1.3}
+.rl span:last-child{flex-shrink:0;font-weight:800}
+.rl.sum{border-bottom:0;font-size:18px;font-weight:900}
+.cxnote{margin:10px 0 0;font-size:14px;line-height:1.4;color:var(--mute)}
+.cxcal{padding:10px;border-radius:12px;background:linear-gradient(180deg,#09090A,#1A1B1D);box-shadow:inset 0 2px 5px rgba(0,0,0,.9),0 1px 0 rgba(255,255,255,.14)}
+.cxmon{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;font-size:17px;font-weight:900}
+.cxmon button{width:44px;height:44px;border:0;border-radius:10px;color:#FAFAF7;font:800 22px var(--font);text-shadow:0 -1px 0 rgba(0,0,0,.6);background:linear-gradient(180deg,#848890 0%,#62666D 36%,#51555B 62%,#45494F 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 -1px 0 rgba(0,0,0,.7),0 2px 0 #050505}
+.cxgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cxdow{padding:2px 0;font-size:11px;font-weight:700;color:var(--mute);text-align:center}
+.cxd{position:relative;height:42px;padding:0;border:0;border-radius:8px;background:linear-gradient(180deg,#4B4E54,#2E3034);box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 1px 2px rgba(0,0,0,.8);color:var(--text);font:700 15px var(--font)}
+.cxd:disabled{background:transparent;box-shadow:none;color:#80838A}
+.cxd.taken::after{content:"";position:absolute;left:50%;bottom:5px;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:#E8867A}
+.cxd.now{box-shadow:inset 0 0 0 2px #E9ECEF,0 1px 2px rgba(0,0,0,.8)}
+.cxd[aria-pressed=true]{color:#1C1B15;background:linear-gradient(180deg,#FFF2B8 0%,#F9D65C 36%,#EFBF30 62%,#DCA61C 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 2px 0 #5C4405}
+.cxd[aria-pressed=true].taken::after{background:#9C2318}
+.cxkey{display:flex;flex-wrap:wrap;gap:6px 16px;margin:8px 2px 0;font-size:12px;font-weight:700;color:var(--mute)}
+.cxkey span{display:inline-flex;align-items:center;gap:6px}
+.cxkey i{display:inline-block;width:8px;height:8px;border-radius:50%;background:#E8867A}
+.cxkey i.now{width:12px;height:12px;border-radius:3px;background:transparent;box-shadow:inset 0 0 0 2px #E9ECEF}
+.cxpick{margin:10px 0 0;font-size:15px}
+.whytk{margin-top:12px}
