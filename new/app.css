@@ -944,9 +944,13 @@ button.stag::after{content:"";position:absolute;left:-4px;right:-4px;top:-7px;bo
   --st-amber:linear-gradient(180deg,#FFD978,#F6A623 55%,#E8900F);
   --st-green:linear-gradient(180deg,#56AE7D,#2B7B4F 55%,#226640);
   --st-grey:linear-gradient(180deg,#8B8E94,#63666C 55%,#525559);
+  /* under white writing the top shade is deeper, so every word measures 4.5:1 (as the green badges since version 16);
+     the middle and bottom shades are the brief's */
+  --st-red-w:linear-gradient(180deg,#C94A3D,#BE3227 55%,#A3251A);
+  --st-green-w:linear-gradient(180deg,#37805A,#2B7B4F 55%,#226640);
   --st-lit:inset 0 1px 0 rgba(255,255,255,.5),0 2px 6px rgba(0,0,0,.5);
   --st-rim:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,.25) 22%,rgba(0,0,0,.5) 60%,rgba(255,255,255,.4));
-  --st-glint:linear-gradient(122deg,transparent 58%,rgba(255,255,255,.2) 70%,rgba(255,255,255,.06) 74%,transparent 80%)
+  --st-glint:linear-gradient(122deg,transparent 58%,rgba(255,255,255,.13) 70%,rgba(255,255,255,.04) 74%,transparent 80%)
 }
 
 /* the four statuses everywhere: Waiting on deposit red, Deposit received yellow (dark words), Booked green, Done grey */
@@ -961,9 +965,9 @@ button.stag::after{content:"";position:absolute;left:-4px;right:-4px;top:-7px;bo
 
 /* the calendar: the whole tile in its status colour, with the chrome rim and the glint; an enquiry's day keeps the dashed circle */
 .pc.st-waiting,.pc.st-deposit,.pc.st-booked,.pc.st-done,.lc.st-waiting,.lc.st-deposit,.lc.st-booked,.lc.st-done{border:1px solid transparent;box-shadow:0 1px 2px rgba(0,0,0,.8)}
-.pc.st-waiting,.lc.st-waiting{background:var(--st-glint) padding-box,var(--st-red) padding-box,var(--st-rim) border-box}
+.pc.st-waiting,.lc.st-waiting{background:var(--st-glint) padding-box,var(--st-red-w) padding-box,var(--st-rim) border-box}
 .pc.st-deposit,.lc.st-deposit{background:var(--st-glint) padding-box,var(--st-amber) padding-box,var(--st-rim) border-box}
-.pc.st-booked,.lc.st-booked{background:var(--st-glint) padding-box,var(--st-green) padding-box,var(--st-rim) border-box}
+.pc.st-booked,.lc.st-booked{background:var(--st-glint) padding-box,var(--st-green-w) padding-box,var(--st-rim) border-box}
 .pc.st-done,.lc.st-done{background:var(--st-glint) padding-box,var(--st-grey) padding-box,var(--st-rim) border-box}
 .pc.st-waiting .pcb,.pc.st-booked .pcb,.pc.st-done .pcb,.lc.st-waiting,.lc.st-booked,.lc.st-done{color:#fff;text-shadow:0 -1px 0 rgba(0,0,0,.45)}
 .pc.st-deposit .pcb,.lc.st-deposit{color:#1C1B15;text-shadow:none}
@@ -999,9 +1003,9 @@ button.stag::after{content:"";position:absolute;left:-4px;right:-4px;top:-7px;bo
 .cskeys.three{grid-template-columns:repeat(3,minmax(0,1fr))}
 .skey{min-height:52px;padding:4px;border:0;border-radius:8px;background:transparent;color:var(--mute);font:800 13px/1.15 var(--font)}
 .skey.on,.csdone .skey{color:#fff;box-shadow:var(--st-lit);text-shadow:0 -1px 0 rgba(0,0,0,.4)}
-.skey.st-waiting{background:var(--st-red)}
+.skey.st-waiting{background:var(--st-red-w)}
 .skey.st-deposit{background:var(--st-amber);color:#1C1B15;text-shadow:none}
-.skey.st-booked{background:var(--st-green)}
+.skey.st-booked{background:var(--st-green-w)}
 .skey.st-done{background:var(--st-grey)}
 .csdone{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;font-size:15px;line-height:1.35;color:var(--mute)}
 .csdone .skey{display:inline-flex;align-items:center;min-height:40px;padding:0 16px}
@@ -1024,7 +1028,7 @@ button.stag::after{content:"";position:absolute;left:-4px;right:-4px;top:-7px;bo
 .st-deposit .mnew{background:linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),var(--st-amber)}
 .st-booked .mnew,.st-done .mnew{background:linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),var(--st-green)}
 .mstop{position:absolute;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:#17181A;box-shadow:inset 0 0 0 2px #4A4D53;color:#fff;font:900 11px/20px var(--font);text-align:center}
-.mstop.on{background:var(--st-green);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 1px 2px rgba(0,0,0,.6)}
+.mstop.on{background:var(--st-green-w);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 1px 2px rgba(0,0,0,.6)}
 .mlab{position:absolute;top:18px;transform:translateX(-50%);font-size:13px;font-weight:700;color:var(--mute);white-space:nowrap}
 .mlab.start{transform:translateX(-12px)}
 .mlab.end{transform:translateX(calc(-100% + 12px))}
@@ -1036,7 +1040,7 @@ button.stag::after{content:"";position:absolute;left:-4px;right:-4px;top:-7px;bo
 .bondtick{min-height:56px;padding:8px 14px;border-radius:10px;background:linear-gradient(180deg,#09090A,#1A1B1D);box-shadow:inset 0 2px 5px rgba(0,0,0,.9),0 1px 0 rgba(255,255,255,.14)}
 .bondtick .bl{flex:1;min-width:0;font-size:16px;font-weight:800}
 .bondtick .bs{font-size:13px;font-weight:700;color:var(--mute);white-space:nowrap}
-.bondtick.on{background:var(--st-green);box-shadow:var(--st-lit);text-shadow:0 -1px 0 rgba(0,0,0,.4)}
+.bondtick.on{background:var(--st-green-w);box-shadow:var(--st-lit);text-shadow:0 -1px 0 rgba(0,0,0,.4)}
 .bondtick.on .bs{color:#fff}
 .bondtick.on .box{border-color:#fff}
 
@@ -1051,6 +1055,7 @@ button.stag::after{content:"";position:absolute;left:-4px;right:-4px;top:-7px;bo
 .refundbox .rv{margin:0;font-size:18px;font-weight:900;letter-spacing:-.02em}
 .cxopts{margin-top:14px}
 .cxopt{min-height:64px}
+.cxopt .tl span+span{color:#F2F3F5}
 .cxfld{margin-top:10px}
 .rlines{border-top:1.5px solid var(--line)}
 .rl{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1.5px solid var(--line);font-size:15px;line-height:1.3}
