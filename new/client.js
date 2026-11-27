@@ -262,6 +262,14 @@ function openSource(id) {
     sheetFoot("<button class=\"btn big save\" type=\"button\" data-do=\"src-save\" data-fid=\"src-save\">" + (srcBack ? "Done" : "Save") + "</button><button class=\"btn line cancel\" type=\"button\" data-do=\"src-back\">" + (srcBack ? "Back" : "Cancel") + "</button>"));
   dlg.setAttribute("aria-label", "How they got in touch");
 }
+/* Closing the picker asks first if a new pick is waiting, or the client sheet behind it holds changes. */
+SHEETS.source = {
+  dirty() {
+    const x = whoOf(srcFor); if (!x) return false;
+    const was = srcBack && held && held.id === srcFor && held.source ? held.source : sourceOf(x, srcFor[0] === "q"), box = $("#src-handle", dlg);
+    return srcPick !== was.source || (!!box && box.value.trim() !== was.handle) || (!!srcBack && changesOf(whoOf(srcBack)).any);
+  }
+};
 /** From the client sheet: the pick goes back to it, held until Confirm. From anywhere else (Event day): it saves straight away. */
 async function saveSource() {
   const id = srcFor, x = whoOf(id); if (!x) return;
